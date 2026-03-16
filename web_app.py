@@ -212,9 +212,10 @@ def run_analysis_background(session_id: str, config: Dict):
             'llm_provider': config['llm_provider'],
             'backend_url': config['backend_url'],
             'api_key': config.get('api_key', ''),
-            'shallow_thinker': config['shallow_thinker'],
-            'deep_thinker': config['deep_thinker'],
-            'research_depth': config['research_depth'],
+            'quick_think_llm': config['shallow_thinker'],
+            'deep_think_llm': config['deep_thinker'],
+            'max_debate_rounds': config['research_depth'],
+            'max_risk_discuss_rounds': config['research_depth'],
             'session_id': session_id  # Add session ID for unique memory collections
         })
 
