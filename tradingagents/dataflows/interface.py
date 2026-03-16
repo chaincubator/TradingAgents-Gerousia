@@ -5,10 +5,12 @@ from .stockstats_utils import *
 from .googlenews_utils import *
 from .finnhub_utils import get_data_in_range
 from .coingecko_utils import (
-    get_crypto_price_data,
     get_crypto_market_data,
     get_crypto_news,
-    get_crypto_technical_indicators
+)
+from .binance_utils import (
+    get_binance_price_history,
+    get_binance_technical_analysis,
 )
 from dateutil.relativedelta import relativedelta
 from concurrent.futures import ThreadPoolExecutor
@@ -838,23 +840,19 @@ def get_crypto_price_history(
     look_back_days: Annotated[int, "How many days to look back"] = 30,
 ) -> str:
     """
-    Get historical price data for a cryptocurrency
-    
+    Get historical price data for a cryptocurrency from Binance Vision (5m candles).
+
     Args:
         symbol: Crypto symbol (e.g., 'BTC', 'ETH', 'ADA')
         curr_date: Current date in yyyy-mm-dd format
         look_back_days: Number of days to look back
-    
+
     Returns:
-        String containing historical price data
+        String containing daily OHLCV summary derived from 5-minute candles
     """
-    from datetime import datetime, timedelta
-    
-    curr_date_obj = datetime.strptime(curr_date, "%Y-%m-%d")
-    start_date_obj = curr_date_obj - timedelta(days=look_back_days)
-    start_date = start_date_obj.strftime("%Y-%m-%d")
-    
-    return get_crypto_price_data(symbol, start_date, curr_date)
+    config = get_config()
+    cache_dir = os.path.join(config.get("data_cache_dir", "./data"), "binance_cache")
+    return get_binance_price_history(symbol, curr_date, look_back_days, cache_dir)
 
 
 def get_crypto_technical_analysis(
@@ -863,17 +861,21 @@ def get_crypto_technical_analysis(
     look_back_days: Annotated[int, "How many days to look back"] = 30,
 ) -> str:
     """
-    Get technical analysis for a cryptocurrency
-    
+    Get technical analysis for a cryptocurrency from Binance Vision (5m candles).
+
+    Computes RSI(14), EMA20/50, Bollinger Bands, VWAP(24h), and support/resistance.
+
     Args:
         symbol: Crypto symbol (e.g., 'BTC', 'ETH', 'ADA')
         curr_date: Current date in yyyy-mm-dd format
-        look_back_days: Number of days to analyze
-    
+        look_back_days: Number of days of 5m candles to analyze
+
     Returns:
-        String containing technical analysis
+        String containing technical indicators
     """
-    return get_crypto_technical_indicators(symbol, curr_date, look_back_days)
+    config = get_config()
+    cache_dir = os.path.join(config.get("data_cache_dir", "./data"), "binance_cache")
+    return get_binance_technical_analysis(symbol, curr_date, look_back_days, cache_dir)
 
 
 def get_crypto_news_analysis(
