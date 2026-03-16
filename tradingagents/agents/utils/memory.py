@@ -5,10 +5,13 @@ from openai import OpenAI
 
 class FinancialSituationMemory:
     def __init__(self, name, config):
-        if config["backend_url"] == "http://localhost:11434/v1":
-            self.embedding = "nomic-embed-text"
-        else:
-            self.embedding = "text-embedding-3-small"
+        _embedding_map = {
+            "http://localhost:11434/v1": "nomic-embed-text",
+            "https://dashscope.aliyuncs.com/compatible-mode/v1": "text-embedding-v3",
+            "https://api.moonshot.cn/v1": "moonshot-v1-embedding",
+            "https://api.minimax.chat/v1": "embo-01",
+        }
+        self.embedding = _embedding_map.get(config["backend_url"], "text-embedding-3-small")
         self.client = OpenAI(
             base_url=config["backend_url"],
             api_key=config["api_key"]

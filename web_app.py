@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 import os
 import re
+import secrets
 
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
@@ -47,6 +48,16 @@ def safe_error_traceback(traceback_str: str) -> str:
 def is_production() -> bool:
     """Check if running in production environment"""
     return os.environ.get('ENVIRONMENT', '').lower() == 'production'
+
+# Allowlist of permitted backend URLs per provider — prevents SSRF attacks
+ALLOWED_BACKEND_URLS = {
+    'openai': 'https://api.openai.com/v1',
+    'anthropic': 'https://api.anthropic.com/',
+    'google': 'https://generativelanguage.googleapis.com/v1',
+    'qwen': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    'kimi': 'https://api.moonshot.cn/v1',
+    'minimax': 'https://api.minimax.chat/v1',
+}
 
 app = Flask(__name__)
 # Use environment variable for SECRET_KEY in production, fallback for development
@@ -156,23 +167,32 @@ def health_check():
 @app.route('/api/start_analysis', methods=['POST'])
 def start_analysis():
     data = request.json
-    session_id = data.get('session_id', str(int(time.time())))
-    
+
+    # Validate backend_url against allowlist to prevent SSRF
+    llm_provider = data.get('llm_provider', '').lower()
+    backend_url = data.get('backend_url', '')
+    allowed_url = ALLOWED_BACKEND_URLS.get(llm_provider)
+    if not allowed_url or backend_url != allowed_url:
+        return jsonify({'error': 'Invalid backend_url for the selected provider'}), 400
+
+    # Generate session_id server-side — never trust client-supplied IDs
+    session_id = secrets.token_urlsafe(16)
+
     # Store analysis configuration
     analysis_sessions[session_id] = {
         'config': data,
         'buffer': WebMessageBuffer(session_id),
         'status': 'running'
     }
-    
+
     # Start analysis in background
     thread = threading.Thread(
-        target=run_analysis_background, 
+        target=run_analysis_background,
         args=(session_id, data)
     )
     thread.daemon = True
     thread.start()
-    
+
     return jsonify({'session_id': session_id, 'status': 'started'})
 
 def run_analysis_background(session_id: str, config: Dict):
@@ -197,6 +217,11 @@ def run_analysis_background(session_id: str, config: Dict):
             'research_depth': config['research_depth'],
             'session_id': session_id  # Add session ID for unique memory collections
         })
+
+        # Clear API key from session storage — it's now in updated_config for the graph,
+        # no need to keep it in the long-lived analysis_sessions dict
+        if session_id in analysis_sessions:
+            analysis_sessions[session_id]['config'].pop('api_key', None)
         
         if not is_production():
             print(f"[DEBUG] LLM provider: {updated_config['llm_provider']}")
@@ -325,7 +350,6 @@ def run_analysis_background(session_id: str, config: Dict):
         print(f"[ERROR] Traceback:\n{safe_error_traceback(error_traceback)}")
         
         buffer.add_message("Error", error_message)
-        buffer.add_message("Error", f"Detailed error: {safe_error_traceback(error_traceback)}")
         buffer.update_progress(0, "Analysis failed")
         analysis_sessions[session_id]['status'] = 'failed'
         

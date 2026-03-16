@@ -1,6 +1,7 @@
 # TradingAgents/graph/trading_graph.py
 
 import os
+import re
 from pathlib import Path
 import json
 from datetime import date
@@ -88,6 +89,17 @@ class TradingAgentsGraph:
             self.quick_thinking_llm = ChatGoogleGenerativeAI(
                 model=self.config["quick_think_llm"],
                 google_api_key=self.config["api_key"]
+            )
+        elif self.config["llm_provider"].lower() in ("qwen", "kimi", "minimax"):
+            self.deep_thinking_llm = ChatOpenAI(
+                model=self.config["deep_think_llm"],
+                base_url=self.config["backend_url"],
+                api_key=self.config["api_key"]
+            )
+            self.quick_thinking_llm = ChatOpenAI(
+                model=self.config["quick_think_llm"],
+                base_url=self.config["backend_url"],
+                api_key=self.config["api_key"]
             )
         else:
             raise ValueError(f"Unsupported LLM provider: {self.config['llm_provider']}")
@@ -254,12 +266,13 @@ class TradingAgentsGraph:
             "final_trade_decision": final_state["final_trade_decision"],
         }
 
-        # Save to file
-        directory = Path(f"eval_results/{self.ticker}/TradingAgentsStrategy_logs/")
+        # Save to file — sanitize ticker to prevent path traversal
+        safe_ticker = re.sub(r'[^A-Za-z0-9_-]', '_', str(self.ticker))
+        directory = Path(f"eval_results/{safe_ticker}/TradingAgentsStrategy_logs/")
         directory.mkdir(parents=True, exist_ok=True)
 
         with open(
-            f"eval_results/{self.ticker}/TradingAgentsStrategy_logs/full_states_log_{trade_date}.json",
+            f"eval_results/{safe_ticker}/TradingAgentsStrategy_logs/full_states_log_{trade_date}.json",
             "w",
         ) as f:
             json.dump(self.log_states_dict, f, indent=4)

@@ -1,13 +1,14 @@
 from flask import Flask, jsonify
 import sys
 import os
+import secrets
 
 # Add the project root to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'tradingagents_secret_key'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 app.config['DEBUG'] = False
 
 @app.route('/')

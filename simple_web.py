@@ -6,13 +6,15 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional
 import uuid
+import os
+import secrets
 
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 from cli.models import AnalystType
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'tradingagents_secret_key'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 
 # Global storage for analysis sessions
 analysis_sessions = {}

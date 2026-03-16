@@ -543,6 +543,9 @@
                                 <option value="openai">OpenAI</option>
                                 <option value="anthropic">Anthropic</option>
                                 <option value="google">Google</option>
+                                <option value="qwen">Qwen (Alibaba)</option>
+                                <option value="kimi">Kimi (Moonshot)</option>
+                                <option value="minimax">MiniMax</option>
                             </select>
                             <input type="text" class="form-control" id="backend_url" name="backend_url" 
                                    placeholder="Backend URL" value="https://api.openai.com/v1" style="margin-top: 12px;">
@@ -752,7 +755,10 @@
             const urls = {
                 'openai': 'https://api.openai.com/v1',
                 'anthropic': 'https://api.anthropic.com/',
-                'google': 'https://generativelanguage.googleapis.com/v1'
+                'google': 'https://generativelanguage.googleapis.com/v1',
+                'qwen': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+                'kimi': 'https://api.moonshot.cn/v1',
+                'minimax': 'https://api.minimax.chat/v1'
             };
             urlInput.value = urls[provider] || '';
             
@@ -801,6 +807,38 @@
                         {value: 'gemini-2.0-flash', text: 'Gemini 2.0 Flash - Next generation features, speed, and thinking'},
                         {value: 'gemini-2.5-flash-preview-05-20', text: 'Gemini 2.5 Flash - Adaptive thinking, cost efficiency'},
                         {value: 'gemini-2.5-pro-preview-06-05', text: 'Gemini 2.5 Pro'}
+                    ]
+                },
+                'qwen': {
+                    shallow: [
+                        {value: 'qwen-turbo-latest', text: 'Qwen Turbo - Fast and cost-effective'},
+                        {value: 'qwen-plus-latest', text: 'Qwen Plus - Balanced performance and speed'}
+                    ],
+                    deep: [
+                        {value: 'qwen-plus-latest', text: 'Qwen Plus - Balanced performance and speed'},
+                        {value: 'qwen-max-latest', text: 'Qwen Max - Highest capability model'},
+                        {value: 'qwen3-235b-a22b', text: 'Qwen3 235B-A22B - Flagship MoE reasoning model'}
+                    ]
+                },
+                'kimi': {
+                    shallow: [
+                        {value: 'moonshot-v1-8k', text: 'Moonshot v1 8K - Fast, short context'},
+                        {value: 'moonshot-v1-32k', text: 'Moonshot v1 32K - Balanced context length'}
+                    ],
+                    deep: [
+                        {value: 'moonshot-v1-32k', text: 'Moonshot v1 32K - Balanced context length'},
+                        {value: 'moonshot-v1-128k', text: 'Moonshot v1 128K - Long context analysis'},
+                        {value: 'kimi-k2', text: 'Kimi K2 - Advanced agentic reasoning model'}
+                    ]
+                },
+                'minimax': {
+                    shallow: [
+                        {value: 'abab6.5s-chat', text: 'MiniMax abab6.5s - Efficient standard model'},
+                        {value: 'MiniMax-Text-01', text: 'MiniMax Text-01 - High performance text model'}
+                    ],
+                    deep: [
+                        {value: 'MiniMax-Text-01', text: 'MiniMax Text-01 - High performance text model'},
+                        {value: 'MiniMax-M1', text: 'MiniMax M1 - Advanced reasoning model'}
                     ]
                 }
             };
