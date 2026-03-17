@@ -710,21 +710,19 @@ def get_YFin_data(
     return filtered_data
 
 
-def get_stock_news_openai(ticker, curr_date):
-    config = get_config()
-    client = OpenAI(base_url=config["backend_url"], api_key=config["api_key"])
+# ---------------------------------------------------------------------------
+# Web-search helpers — one per provider, dispatched by config["llm_provider"]
+# ---------------------------------------------------------------------------
 
+def _web_search_openai(prompt: str, config: dict) -> str:
+    """OpenAI Responses API with web_search_preview (OpenAI only)."""
+    client = OpenAI(base_url=config["backend_url"], api_key=config["api_key"])
     response = client.responses.create(
         model=config["quick_think_llm"],
         input=[
             {
                 "role": "system",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": f"Can you search Social Media for {ticker} from 7 days before {curr_date} to {curr_date}? Make sure you only get the data posted during that period.",
-                    }
-                ],
+                "content": [{"type": "input_text", "text": prompt}],
             }
         ],
         text={"format": {"type": "text"}},
@@ -741,78 +739,76 @@ def get_stock_news_openai(ticker, curr_date):
         top_p=1,
         store=True,
     )
-
     return response.output[1].content[0].text
+
+
+def _web_search_anthropic(prompt: str, config: dict) -> str:
+    """Anthropic Messages API with web_search_20250305 tool."""
+    import anthropic
+    client = anthropic.Anthropic(api_key=config["api_key"])
+    response = client.messages.create(
+        model=config["quick_think_llm"],
+        max_tokens=4096,
+        tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}],
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return "".join(
+        block.text for block in response.content if hasattr(block, "text")
+    )
+
+
+def _web_search_qwen(prompt: str, config: dict) -> str:
+    """Qwen/DashScope chat completions with enable_search=True."""
+    client = OpenAI(base_url=config["backend_url"], api_key=config["api_key"])
+    response = client.chat.completions.create(
+        model=config["quick_think_llm"],
+        messages=[{"role": "user", "content": prompt}],
+        extra_body={"enable_search": True},
+    )
+    return response.choices[0].message.content
+
+
+def _web_search_dispatch(prompt: str, config: dict) -> str:
+    """Route to the correct web-search implementation based on llm_provider."""
+    provider = config.get("llm_provider", "openai").lower()
+    if provider == "anthropic":
+        return _web_search_anthropic(prompt, config)
+    if provider == "qwen":
+        return _web_search_qwen(prompt, config)
+    return _web_search_openai(prompt, config)
+
+
+# ---------------------------------------------------------------------------
+# Public tool functions called by the agent toolkit
+# ---------------------------------------------------------------------------
+
+def get_stock_news_openai(ticker, curr_date):
+    config = get_config()
+    prompt = (
+        f"Can you search Social Media for {ticker} from 7 days before {curr_date} "
+        f"to {curr_date}? Make sure you only get the data posted during that period."
+    )
+    return _web_search_dispatch(prompt, config)
 
 
 def get_global_news_openai(curr_date):
     config = get_config()
-    client = OpenAI(base_url=config["backend_url"], api_key=config["api_key"])
-
-    response = client.responses.create(
-        model=config["quick_think_llm"],
-        input=[
-            {
-                "role": "system",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": f"Can you search global or macroeconomics news from 7 days before {curr_date} to {curr_date} that would be informative for trading purposes? Make sure you only get the data posted during that period.",
-                    }
-                ],
-            }
-        ],
-        text={"format": {"type": "text"}},
-        reasoning={},
-        tools=[
-            {
-                "type": "web_search_preview",
-                "user_location": {"type": "approximate"},
-                "search_context_size": "low",
-            }
-        ],
-        temperature=1,
-        max_output_tokens=4096,
-        top_p=1,
-        store=True,
+    prompt = (
+        f"Can you search global or macroeconomics news from 7 days before {curr_date} "
+        f"to {curr_date} that would be informative for trading purposes? "
+        "Make sure you only get the data posted during that period."
     )
-
-    return response.output[1].content[0].text
+    return _web_search_dispatch(prompt, config)
 
 
 def get_fundamentals_openai(ticker, curr_date):
     config = get_config()
-    client = OpenAI(base_url=config["backend_url"], api_key=config["api_key"])
-
-    response = client.responses.create(
-        model=config["quick_think_llm"],
-        input=[
-            {
-                "role": "system",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": f"Can you search Fundamental for discussions on {ticker} during of the month before {curr_date} to the month of {curr_date}. Make sure you only get the data posted during that period. List as a table, with PE/PS/Cash flow/ etc",
-                    }
-                ],
-            }
-        ],
-        text={"format": {"type": "text"}},
-        reasoning={},
-        tools=[
-            {
-                "type": "web_search_preview",
-                "user_location": {"type": "approximate"},
-                "search_context_size": "low",
-            }
-        ],
-        temperature=1,
-        max_output_tokens=4096,
-        top_p=1,
-        store=True,
+    prompt = (
+        f"Can you search Fundamental for discussions on {ticker} during the month "
+        f"before {curr_date} to the month of {curr_date}. Make sure you only get the "
+        "data posted during that period. List as a table, with PE/PS/Cash flow/ etc."
     )
-
-    return response.output[1].content[0].text
+    return _web_search_dispatch(prompt, config)
 
 
 # ===== CRYPTO TRADING FUNCTIONS =====
