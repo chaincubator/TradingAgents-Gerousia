@@ -11,11 +11,12 @@ ANALYST_ORDER = [
 ]
 
 
-def get_ticker() -> str:
-    """Prompt the user to enter a ticker symbol."""
-    ticker = questionary.text(
-        "Enter the ticker symbol to analyze:",
-        validate=lambda x: len(x.strip()) > 0 or "Please enter a valid ticker symbol.",
+def get_ticker() -> List[str]:
+    """Prompt the user to enter one or more ticker symbols (comma or space separated)."""
+    import re
+    raw = questionary.text(
+        "Enter ticker symbol(s) to analyze (comma or space separated):",
+        validate=lambda x: len(x.strip()) > 0 or "Please enter at least one ticker symbol.",
         style=questionary.Style(
             [
                 ("text", "fg:green"),
@@ -24,11 +25,16 @@ def get_ticker() -> str:
         ),
     ).ask()
 
-    if not ticker:
+    if not raw:
         console.print("\n[red]No ticker symbol provided. Exiting...[/red]")
         exit(1)
 
-    return ticker.strip().upper()
+    symbols = [s.upper() for s in re.split(r'[,\s]+', raw.strip()) if s]
+    if not symbols:
+        console.print("\n[red]No valid ticker symbols found. Exiting...[/red]")
+        exit(1)
+
+    return symbols
 
 
 def get_analysis_date() -> str:

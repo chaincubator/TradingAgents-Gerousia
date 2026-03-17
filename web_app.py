@@ -204,9 +204,16 @@ def run_analysis_background(session_id: str, config: Dict):
             print(f"[DEBUG] Config: {safe_log_config(config)}")
             print(f"[DEBUG] Selected analysts: {config['analysts']}")
         
+        import re as _re
         buffer = analysis_sessions[session_id]['buffer']
-        buffer.add_message("System", f"Initializing analysis for {config['ticker']}...")
-        # Update configuration based on user selections
+
+        # Parse comma/space-separated tickers
+        raw_ticker = config.get('ticker', 'BTC')
+        tickers = [s.upper() for s in _re.split(r'[,\s]+', raw_ticker.strip()) if s]
+        if not tickers:
+            tickers = ['BTC']
+
+        # Build config
         updated_config = DEFAULT_CONFIG.copy()
         updated_config.update({
             'llm_provider': config['llm_provider'],
@@ -216,131 +223,128 @@ def run_analysis_background(session_id: str, config: Dict):
             'deep_think_llm': config['deep_thinker'],
             'max_debate_rounds': config['research_depth'],
             'max_risk_discuss_rounds': config['research_depth'],
-            'session_id': session_id  # Add session ID for unique memory collections
+            'session_id': session_id
         })
 
-        # Clear API key from session storage — it's now in updated_config for the graph,
-        # no need to keep it in the long-lived analysis_sessions dict
+        # Clear API key from session storage
         if session_id in analysis_sessions:
             analysis_sessions[session_id]['config'].pop('api_key', None)
-        
+
         if not is_production():
             print(f"[DEBUG] LLM provider: {updated_config['llm_provider']}")
-        
-        # Initialize the graph with correct parameters
+            print(f"[DEBUG] Tickers: {tickers}")
+
+        buffer.add_message("System", f"Initializing analysis for {', '.join(tickers)}...")
+
+        # Graph is ticker-agnostic — initialise once
         graph = TradingAgentsGraph(
             selected_analysts=config['analysts'],
             debug=False,
             config=updated_config
         )
         buffer.add_message("System", "Graph initialized successfully")
-        
-        if not is_production():
-            print("[DEBUG] Graph initialized successfully")
-            print(f"[DEBUG] Creating initial state for {config['ticker']} on {config['analysis_date']}")
-        # Create initial state
-        init_state = graph.propagator.create_initial_state(
-            config['ticker'], 
-            config['analysis_date']
-        )
-        buffer.add_message("System", "Initial state created successfully")
-        
-        buffer.add_message("System", f"Starting analysis for {config['ticker']} on {config['analysis_date']}")
-        buffer.update_progress(10, "Initializing analysis...")
-        
-        # Send analysis info to frontend
-        socketio.emit('analysis_info_update', {
-            'ticker': config['ticker'],
-            'analysis_date': config['analysis_date']
-        }, room=session_id)
-        
-        # Get graph args
+
         args = graph.propagator.get_graph_args()
-        
-        # Stream the analysis
-        step_count = 0
-        total_steps = len(config['analysts']) * 2 + 5  # Rough estimate
-        
-        for chunk in graph.graph.stream(init_state, **args):
-            step_count += 1
-            progress = min(90, (step_count / total_steps) * 80 + 10)
-            
-            if len(chunk.get("messages", [])) > 0:
-                last_message = chunk["messages"][-1]
-                
-                if hasattr(last_message, "content"):
-                    content = str(last_message.content)
-                    if len(content) > 500:  # Truncate very long messages
-                        content = content[:500] + "..."
-                    buffer.add_message("Analysis", content)
-                
-                # Update agent statuses based on chunk content
-                if "market_report" in chunk and chunk["market_report"]:
-                    buffer.update_report_section("market_report", chunk["market_report"])
-                    buffer.update_agent_status("Market Analyst", "completed")
-                    buffer.update_progress(progress, "Market analysis completed")
-                
-                if "sentiment_report" in chunk and chunk["sentiment_report"]:
-                    buffer.update_report_section("sentiment_report", chunk["sentiment_report"])
-                    buffer.update_agent_status("Social Analyst", "completed")
-                    buffer.update_progress(progress, "Social sentiment analysis completed")
-                
-                if "news_report" in chunk and chunk["news_report"]:
-                    buffer.update_report_section("news_report", chunk["news_report"])
-                    buffer.update_agent_status("News Analyst", "completed")
-                    buffer.update_progress(progress, "News analysis completed")
-                
-                if "fundamentals_report" in chunk and chunk["fundamentals_report"]:
-                    buffer.update_report_section("fundamentals_report", chunk["fundamentals_report"])
-                    buffer.update_agent_status("Fundamentals Analyst", "completed")
-                    buffer.update_progress(progress, "Fundamentals analysis completed")
-                
-                # Handle research team updates
-                if "investment_debate_state" in chunk and chunk["investment_debate_state"]:
-                    debate_state = chunk["investment_debate_state"]
-                    
-                    # Update Bull Researcher status and report
-                    if "bull_history" in debate_state and debate_state["bull_history"]:
-                        buffer.update_agent_status("Bull Researcher", "in_progress")
-                        # Extract latest bull response
-                        bull_responses = debate_state["bull_history"].split("\n")
-                        latest_bull = bull_responses[-1] if bull_responses else ""
-                        if latest_bull and len(latest_bull.strip()) > 0:
-                            buffer.add_message("Bull Researcher", f"Bull Analysis: {latest_bull}")
-                    
-                    # Update Bear Researcher status and report  
-                    if "bear_history" in debate_state and debate_state["bear_history"]:
-                        buffer.update_agent_status("Bear Researcher", "in_progress")
-                        # Extract latest bear response
-                        bear_responses = debate_state["bear_history"].split("\n")
-                        latest_bear = bear_responses[-1] if bear_responses else ""
-                        if latest_bear and len(latest_bear.strip()) > 0:
-                            buffer.add_message("Bear Researcher", f"Bear Analysis: {latest_bear}")
-                    
-                    # Update Research Manager status and final decision
-                    if "judge_decision" in debate_state and debate_state["judge_decision"]:
-                        buffer.update_report_section("investment_plan", debate_state["judge_decision"])
-                        buffer.update_agent_status("Bull Researcher", "completed")
-                        buffer.update_agent_status("Bear Researcher", "completed") 
-                        buffer.update_agent_status("Research Manager", "completed")
-                        buffer.add_message("Research Manager", f"Final Decision: {debate_state['judge_decision']}")
-                        buffer.update_progress(progress, "Research team decision completed")
-                
-                # Handle trading team updates
-                if "trader_investment_plan" in chunk and chunk["trader_investment_plan"]:
-                    buffer.update_report_section("trader_investment_plan", chunk["trader_investment_plan"])
-                    buffer.update_agent_status("Trader", "completed")
-                    buffer.update_progress(progress, "Trading plan completed")
-                
-                # Handle final decision
-                if "final_trade_decision" in chunk and chunk["final_trade_decision"]:
-                    buffer.update_report_section("final_trade_decision", chunk["final_trade_decision"])
-                    buffer.update_agent_status("Portfolio Manager", "completed")
-                    buffer.update_progress(100, "Analysis completed!")
-        
-        buffer.update_progress(100, "Analysis completed successfully!")
+        total_steps = len(config['analysts']) * 2 + 5
+        symbol_results = {}
+
+        for ticker_idx, ticker in enumerate(tickers):
+            ticker_base_progress = int(ticker_idx * 90 / len(tickers))
+            ticker_progress_range = int(90 / len(tickers))
+
+            buffer.add_message("System", f"[{ticker_idx+1}/{len(tickers)}] Starting analysis for {ticker} on {config['analysis_date']}")
+            buffer.update_progress(ticker_base_progress + 5, f"Analysing {ticker}...")
+
+            socketio.emit('analysis_info_update', {
+                'ticker': ticker,
+                'analysis_date': config['analysis_date']
+            }, room=session_id)
+
+            init_state = graph.propagator.create_initial_state(ticker, config['analysis_date'])
+
+            step_count = 0
+            for chunk in graph.graph.stream(init_state, **args):
+                step_count += 1
+                stream_pct = min(1.0, step_count / total_steps)
+                progress = ticker_base_progress + int(stream_pct * ticker_progress_range)
+
+                if len(chunk.get("messages", [])) > 0:
+                    last_message = chunk["messages"][-1]
+                    if hasattr(last_message, "content"):
+                        content = str(last_message.content)
+                        if len(content) > 500:
+                            content = content[:500] + "..."
+                        buffer.add_message("Analysis", content)
+
+                    if "market_report" in chunk and chunk["market_report"]:
+                        buffer.update_report_section("market_report", chunk["market_report"])
+                        buffer.update_agent_status("Market Analyst", "completed")
+                        buffer.update_progress(progress, f"[{ticker}] Market analysis completed")
+
+                    if "sentiment_report" in chunk and chunk["sentiment_report"]:
+                        buffer.update_report_section("sentiment_report", chunk["sentiment_report"])
+                        buffer.update_agent_status("Social Analyst", "completed")
+                        buffer.update_progress(progress, f"[{ticker}] Social sentiment completed")
+
+                    if "news_report" in chunk and chunk["news_report"]:
+                        buffer.update_report_section("news_report", chunk["news_report"])
+                        buffer.update_agent_status("News Analyst", "completed")
+                        buffer.update_progress(progress, f"[{ticker}] News analysis completed")
+
+                    if "fundamentals_report" in chunk and chunk["fundamentals_report"]:
+                        buffer.update_report_section("fundamentals_report", chunk["fundamentals_report"])
+                        buffer.update_agent_status("Fundamentals Analyst", "completed")
+                        buffer.update_progress(progress, f"[{ticker}] Fundamentals completed")
+
+                    if "investment_debate_state" in chunk and chunk["investment_debate_state"]:
+                        debate_state = chunk["investment_debate_state"]
+                        if "bull_history" in debate_state and debate_state["bull_history"]:
+                            buffer.update_agent_status("Bull Researcher", "in_progress")
+                            latest_bull = debate_state["bull_history"].split("\n")[-1]
+                            if latest_bull.strip():
+                                buffer.add_message("Bull Researcher", f"Bull Analysis: {latest_bull}")
+                        if "bear_history" in debate_state and debate_state["bear_history"]:
+                            buffer.update_agent_status("Bear Researcher", "in_progress")
+                            latest_bear = debate_state["bear_history"].split("\n")[-1]
+                            if latest_bear.strip():
+                                buffer.add_message("Bear Researcher", f"Bear Analysis: {latest_bear}")
+                        if "judge_decision" in debate_state and debate_state["judge_decision"]:
+                            buffer.update_report_section("investment_plan", debate_state["judge_decision"])
+                            buffer.update_agent_status("Bull Researcher", "completed")
+                            buffer.update_agent_status("Bear Researcher", "completed")
+                            buffer.update_agent_status("Research Manager", "completed")
+                            buffer.update_progress(progress, f"[{ticker}] Research team decision completed")
+
+                    if "trader_investment_plan" in chunk and chunk["trader_investment_plan"]:
+                        buffer.update_report_section("trader_investment_plan", chunk["trader_investment_plan"])
+                        buffer.update_agent_status("Trader", "completed")
+                        buffer.update_progress(progress, f"[{ticker}] Trading plan completed")
+
+                    if "final_trade_decision" in chunk and chunk["final_trade_decision"]:
+                        buffer.update_report_section("final_trade_decision", chunk["final_trade_decision"])
+                        buffer.update_agent_status("Portfolio Manager", "completed")
+                        symbol_results[ticker] = {"final_trade_decision": chunk["final_trade_decision"]}
+                        buffer.update_progress(
+                            ticker_base_progress + ticker_progress_range,
+                            f"[{ticker}] Analysis completed!"
+                        )
+
+            buffer.add_message("System", f"[{ticker}] Analysis finished.")
+
+        # Portfolio MVO — only when multiple tickers analysed
+        if len(tickers) > 1 and len(symbol_results) > 1:
+            from tradingagents.agents.portfolio.mvo import run_portfolio_mvo
+            buffer.add_message("System", "Running portfolio optimisation (MVO)...")
+            buffer.update_progress(92, "Portfolio optimisation...")
+            portfolio_report = run_portfolio_mvo(symbol_results, config['analysis_date'])
+            socketio.emit('portfolio_update', {'report': portfolio_report}, room=session_id)
+            buffer.add_message("Portfolio", portfolio_report)
+            buffer.update_progress(100, "Portfolio optimisation complete!")
+        else:
+            buffer.update_progress(100, "Analysis completed successfully!")
+
         analysis_sessions[session_id]['status'] = 'completed'
-        
+
         # Clean up ChromaDB collections for this session after completion
         cleanup_session_collections(session_id)
         

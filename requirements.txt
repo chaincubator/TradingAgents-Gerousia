@@ -16,6 +16,7 @@ finnhub-python
 parsel
 requests
 python-binance
+scipy
 tqdm
 pytz
 redis
