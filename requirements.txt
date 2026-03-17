@@ -15,6 +15,7 @@ tushare
 finnhub-python
 parsel
 requests
+python-binance
 tqdm
 pytz
 redis

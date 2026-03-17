@@ -22,6 +22,7 @@ chromadb
 
 # Web Scraping and Data Sources
 requests
+python-binance
 feedparser
 praw
 parsel
