@@ -54,7 +54,7 @@ ALLOWED_BACKEND_URLS = {
     'openai': 'https://api.openai.com/v1',
     'anthropic': 'https://api.anthropic.com/',
     'google': 'https://generativelanguage.googleapis.com/v1',
-    'qwen': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    'qwen': 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
     'kimi': 'https://api.moonshot.cn/v1',
     'minimax': 'https://api.minimax.chat/v1',
 }

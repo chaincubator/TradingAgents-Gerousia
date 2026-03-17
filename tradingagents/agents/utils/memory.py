@@ -7,7 +7,7 @@ class FinancialSituationMemory:
     def __init__(self, name, config):
         _embedding_map = {
             "http://localhost:11434/v1": "nomic-embed-text",
-            "https://dashscope.aliyuncs.com/compatible-mode/v1": "text-embedding-v3",
+            "https://dashscope-intl.aliyuncs.com/compatible-mode/v1": "text-embedding-v3",
             "https://api.moonshot.cn/v1": "moonshot-v1-embedding",
             "https://api.minimax.chat/v1": "embo-01",
         }

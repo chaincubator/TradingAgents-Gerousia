@@ -152,7 +152,11 @@ def select_shallow_thinking_agent(provider) -> str:
         "ollama": [
             ("llama3.1 local", "llama3.1"),
             ("llama3.2 local", "llama3.2"),
-        ]
+        ],
+        "qwen": [
+            ("Qwen Turbo - Fast and cost-effective", "qwen-turbo-latest"),
+            ("Qwen Plus - Balanced performance and speed", "qwen-plus-latest"),
+        ],
     }
 
     choice = questionary.select(
@@ -214,7 +218,12 @@ def select_deep_thinking_agent(provider) -> str:
         "ollama": [
             ("llama3.1 local", "llama3.1"),
             ("qwen3", "qwen3"),
-        ]
+        ],
+        "qwen": [
+            ("Qwen Plus - Balanced performance and speed", "qwen-plus-latest"),
+            ("Qwen Max - Highest capability model", "qwen-max-latest"),
+            ("Qwen3 235B-A22B - Flagship MoE reasoning model", "qwen3-235b-a22b"),
+        ],
     }
     
     choice = questionary.select(
@@ -247,7 +256,8 @@ def select_llm_provider() -> tuple[str, str]:
         ("Anthropic", "https://api.anthropic.com/"),
         ("Google", "https://generativelanguage.googleapis.com/v1"),
         ("Openrouter", "https://openrouter.ai/api/v1"),
-        ("Ollama", "http://localhost:11434/v1"),        
+        ("Ollama", "http://localhost:11434/v1"),
+        ("Qwen", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"),
     ]
     
     choice = questionary.select(
