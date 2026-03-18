@@ -326,11 +326,16 @@ def run_analysis_background(session_id: str, config: Dict):
                         buffer.update_report_section("trader_investment_plan", chunk["trader_investment_plan"])
                         buffer.update_agent_status("Trader", "completed")
                         buffer.update_progress(progress, f"[{ticker}] Trading plan completed")
+                        if ticker not in symbol_results:
+                            symbol_results[ticker] = {}
+                        symbol_results[ticker]["trader_investment_plan"] = chunk["trader_investment_plan"]
 
                     if "final_trade_decision" in chunk and chunk["final_trade_decision"]:
                         buffer.update_report_section("final_trade_decision", chunk["final_trade_decision"])
                         buffer.update_agent_status("Portfolio Manager", "completed")
-                        symbol_results[ticker] = {"final_trade_decision": chunk["final_trade_decision"]}
+                        if ticker not in symbol_results:
+                            symbol_results[ticker] = {}
+                        symbol_results[ticker]["final_trade_decision"] = chunk["final_trade_decision"]
                         buffer.update_progress(
                             ticker_base_progress + ticker_progress_range,
                             f"[{ticker}] Analysis completed!"
@@ -356,6 +361,7 @@ def run_analysis_background(session_id: str, config: Dict):
             buffer.add_message("System", "Running portfolio optimisation (MVO)...")
             buffer.update_progress(92, "Portfolio optimisation...")
             portfolio_report = run_portfolio_mvo(symbol_results, config['analysis_date'])
+            analysis_sessions[session_id]['portfolio_report'] = portfolio_report
             socketio.emit('portfolio_update', {'report': portfolio_report}, room=session_id)
             buffer.add_message("Portfolio", portfolio_report)
             buffer.update_progress(100, "Portfolio optimisation complete!")
@@ -401,6 +407,7 @@ def handle_join_session(data):
             'progress': buffer.progress,
             'current_step': buffer.current_step,
             'per_ticker_reports': analysis_sessions[session_id].get('per_ticker_reports', {}),
+            'portfolio_report': analysis_sessions[session_id].get('portfolio_report'),
         })
 
 if __name__ == '__main__':

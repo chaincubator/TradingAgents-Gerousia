@@ -1005,13 +1005,26 @@ def run_analysis():
             message_buffer.add_message("System", "Running portfolio optimisation (MVO)...")
             update_display(layout)
             portfolio_report = run_portfolio_mvo(
-                {t: {"final_trade_decision": symbol_results[t].get("final_trade_decision", "")}
-                 for t in symbol_results},
+                {t: {
+                    "final_trade_decision":  symbol_results[t].get("final_trade_decision", ""),
+                    "trader_investment_plan": symbol_results[t].get("trader_investment_plan", ""),
+                 } for t in symbol_results},
                 analysis_date,
             )
             portfolio_dir = Path(config["results_dir"]) / "_portfolio" / analysis_date
             portfolio_dir.mkdir(parents=True, exist_ok=True)
             (portfolio_dir / "portfolio_mvo.md").write_text(portfolio_report, encoding="utf-8")
+
+            # Save combined multi-ticker report: portfolio first, then per-ticker sections
+            combined_parts = [portfolio_report, "\n\n---\n\n# Individual Token Reports\n"]
+            for t in symbol_results:
+                tok_dir = Path(config["results_dir"]) / t / analysis_date
+                full_report_path = tok_dir / "full_report.md"
+                if full_report_path.exists():
+                    combined_parts.append(full_report_path.read_text(encoding="utf-8"))
+            (portfolio_dir / "full_portfolio_report.md").write_text(
+                "\n\n".join(combined_parts), encoding="utf-8"
+            )
             message_buffer.add_message("System", f"Portfolio saved → {portfolio_dir}/portfolio_mvo.md")
             update_display(layout)
 

@@ -691,9 +691,15 @@
             updateMessages(data.messages);
             updateProgress(data.progress, data.current_step);
 
-            // Restore permanent per-ticker groups first
+            // Restore portfolio block at top (if analysis completed)
+            if (data.portfolio_report) {
+                showPortfolioAtTop(data.portfolio_report);
+            }
+
+            // Restore permanent per-ticker groups
             if (data.per_ticker_reports && Object.keys(data.per_ticker_reports).length > 0) {
-                document.getElementById('reportsContainer').innerHTML = '';
+                // Clear everything below portfolio block before restoring ticker groups
+                document.querySelectorAll('[data-ticker-group]').forEach(el => el.remove());
                 Object.entries(data.per_ticker_reports).forEach(([ticker, sections]) => {
                     addTickerGroup(ticker, sections);
                 });
@@ -727,6 +733,30 @@
         socket.on('analysis_info_update', function(data) {
             document.getElementById('analysisInfo').textContent = `Analyzing ${data.ticker} on ${data.analysis_date}`;
         });
+
+        // Portfolio MVO result — shown at the top of the report container
+        socket.on('portfolio_update', function(data) {
+            showPortfolioAtTop(data.report);
+        });
+
+        function showPortfolioAtTop(markdown) {
+            const container = document.getElementById('reportsContainer');
+            // Remove any existing portfolio block
+            const existing = document.getElementById('portfolioBlock');
+            if (existing) existing.remove();
+
+            const block = document.createElement('div');
+            block.id = 'portfolioBlock';
+            block.className = 'portfolio-block mb-5';
+            block.innerHTML = `
+                <div class="portfolio-header p-3 mb-3" style="background:var(--progress-bg);border-radius:8px;color:#fff;">
+                    <h4 class="mb-0"><i class="fas fa-briefcase me-2"></i>Portfolio Recommendation</h4>
+                </div>
+                <div class="report-content">${marked.parse(markdown)}</div>
+                <hr>`;
+            container.insertBefore(block, container.firstChild);
+            container.scrollTop = 0;
+        }
         
         // Removed duplicate progress_update listener - handled below with completion notification
         
@@ -885,11 +915,16 @@
         }
         
         function exportReport() {
-            // Prefer permanent ticker groups; fall back to whatever is in the container
-            const tickerGroups = document.querySelectorAll('[data-ticker-group]');
-            const reportsHtml = tickerGroups.length > 0
-                ? Array.from(tickerGroups).map(g => g.outerHTML).join('\n')
-                : document.getElementById('reportsContainer').innerHTML;
+            // Portfolio block first (if present), then per-ticker groups
+            const portfolioBlock = document.getElementById('portfolioBlock');
+            const tickerGroups   = document.querySelectorAll('[data-ticker-group]');
+            let reportsHtml = '';
+            if (portfolioBlock) reportsHtml += portfolioBlock.outerHTML + '\n';
+            if (tickerGroups.length > 0) {
+                reportsHtml += Array.from(tickerGroups).map(g => g.outerHTML).join('\n');
+            } else if (!portfolioBlock) {
+                reportsHtml = document.getElementById('reportsContainer').innerHTML;
+            }
 
             const blob = new Blob([`
                 <!DOCTYPE html>
