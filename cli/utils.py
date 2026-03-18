@@ -163,6 +163,8 @@ def select_shallow_thinking_agent(provider) -> str:
         "qwen": [
             ("Qwen Turbo - Fast and cost-effective", "qwen-turbo-latest"),
             ("Qwen Plus - Balanced performance and speed", "qwen-plus-latest"),
+            ("Qwen3.5 122B-A10B - Hybrid MoE model", "qwen3.5-122b-a10b"),
+            ("Qwen VL Plus - Vision Language model", "qwen-vl-plus-2025-05-07"),
         ],
     }
 
@@ -228,8 +230,14 @@ def select_deep_thinking_agent(provider) -> str:
         ],
         "qwen": [
             ("Qwen Plus - Balanced performance and speed", "qwen-plus-latest"),
+            ("Qwen Plus 2025-07-28 - Latest Qwen Plus", "qwen-plus-2025-07-28"),
             ("Qwen Max - Highest capability model", "qwen-max-latest"),
+            ("Qwen3 Max - Qwen3 flagship model", "qwen3-max"),
             ("Qwen3 235B-A22B - Flagship MoE reasoning model", "qwen3-235b-a22b"),
+            ("Qwen3.5 122B-A10B - Hybrid MoE model", "qwen3.5-122b-a10b"),
+            ("Qwen VL Plus - Vision Language model", "qwen-vl-plus-2025-05-07"),
+            ("Qwen VL OCR - Vision Language OCR model", "qwen-vl-ocr-2025-11-20"),
+            ("Qwen3 VL 235B-A22B Thinking - Multimodal reasoning", "qwen3-vl-235b-a22b-thinking"),
         ],
     }
     
