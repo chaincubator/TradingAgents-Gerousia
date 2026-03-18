@@ -66,7 +66,7 @@ def create_news_analyst(llm, toolkit):
                 "Focus on crypto-specific news including: regulatory developments, institutional adoption, technology updates, market sentiment, DeFi trends, NFT markets, blockchain developments, and major crypto exchange news. "
                 "Also consider traditional macroeconomic factors that impact crypto markets such as inflation, monetary policy, global economic uncertainty, and traditional market trends. "
                 "Do not simply state the trends are mixed, provide detailed and fine-grained analysis and insights that may help crypto traders make decisions."
-                + """ Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."""
+                + " Make sure to append a concise Markdown table at the end. Be concise and direct. Keep your response under 4096 characters."
             )
         else:
             # Use stock-specific tools (original functionality)
@@ -81,7 +81,7 @@ def create_news_analyst(llm, toolkit):
 
             system_message = (
                 "You are a news researcher tasked with analyzing recent news and trends over the past week. Please write a comprehensive report of the current state of the world that is relevant for trading and macroeconomics. Look at news from EODHD, and finnhub to be comprehensive. Do not simply state the trends are mixed, provide detailed and finegrained analysis and insights that may help traders make decisions."
-                + """ Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."""
+                + " Make sure to append a concise Markdown table at the end. Be concise and direct. Keep your response under 4096 characters."
             )
 
         prompt = ChatPromptTemplate.from_messages(

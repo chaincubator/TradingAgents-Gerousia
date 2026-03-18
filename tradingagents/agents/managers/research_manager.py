@@ -35,15 +35,18 @@ Here are your past reflections on mistakes:
 
 Here is the debate:
 Debate History:
-{history}"""
+{history}
+
+Be concise and direct. Keep your response under 4096 characters."""
         response = llm.invoke(prompt)
+        content = response.content[:4096] if len(response.content) > 4096 else response.content
 
         new_investment_debate_state = {
-            "judge_decision": response.content,
+            "judge_decision": content,
             "history": investment_debate_state.get("history", ""),
             "bear_history": investment_debate_state.get("bear_history", ""),
             "bull_history": investment_debate_state.get("bull_history", ""),
-            "current_response": response.content,
+            "current_response": content,
             "count": investment_debate_state["count"],
         }
 

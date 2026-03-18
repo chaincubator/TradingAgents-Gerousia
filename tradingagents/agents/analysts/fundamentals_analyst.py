@@ -66,7 +66,7 @@ def create_fundamentals_analyst(llm, toolkit):
                 "You are a cryptocurrency fundamental analyst tasked with analyzing fundamental information about a cryptocurrency. Please write a comprehensive report of the cryptocurrency's fundamental information such as market capitalization, supply mechanics, token economics, network metrics, adoption indicators, and market positioning to gain a full view of the cryptocurrency's fundamental value proposition to inform traders. "
                 "Focus on crypto-specific metrics like: market cap rank, circulating vs total supply, trading volume patterns, network activity, developer ecosystem, regulatory environment, community strength, and technology fundamentals. "
                 "Make sure to include as much detail as possible. Do not simply state the trends are mixed, provide detailed and fine-grained analysis and insights that may help crypto traders make decisions."
-                + " Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read.",
+                + " Make sure to append a concise Markdown table at the end. Be concise and direct. Keep your response under 4096 characters.",
             )
         else:
             # Use stock-specific tools (original functionality)
@@ -83,7 +83,7 @@ def create_fundamentals_analyst(llm, toolkit):
 
             system_message = (
                 "You are a researcher tasked with analyzing fundamental information over the past week about a company. Please write a comprehensive report of the company's fundamental information such as financial documents, company profile, basic company financials, company financial history, insider sentiment and insider transactions to gain a full view of the company's fundamental information to inform traders. Make sure to include as much detail as possible. Do not simply state the trends are mixed, provide detailed and finegrained analysis and insights that may help traders make decisions."
-                + " Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read.",
+                + " Make sure to append a concise Markdown table at the end. Be concise and direct. Keep your response under 4096 characters.",
             )
 
         prompt = ChatPromptTemplate.from_messages(

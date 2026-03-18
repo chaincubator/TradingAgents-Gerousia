@@ -75,7 +75,7 @@ Key areas to analyze for cryptocurrency:
 - Market sentiment and psychological levels
 
 Please write a very detailed and nuanced report of the trends you observe in the cryptocurrency market. Analyze both short-term and long-term trends. Do not simply state the trends are mixed, provide detailed and fine-grained analysis and insights that may help crypto traders make decisions. Consider the unique characteristics of cryptocurrency markets such as 24/7 trading, higher volatility, and sentiment-driven movements."""
-                + """ Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."""
+                + " Make sure to append a concise Markdown table at the end. Be concise and direct. Keep your response under 4096 characters."
             )
         else:
             # Use stock-specific tools (original functionality)

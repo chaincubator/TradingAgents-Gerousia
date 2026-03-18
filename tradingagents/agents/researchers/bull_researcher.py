@@ -40,11 +40,12 @@ Conversation history of the debate: {history}
 Last bear argument: {current_response}
 Reflections from similar situations and lessons learned: {past_memory_str}
 Use this information to deliver a compelling bull argument, refute the bear's concerns, and engage in a dynamic debate that demonstrates the strengths of the bull position. You must also address reflections and learn from lessons and mistakes you made in the past.
+Be concise and direct. Keep your response under 4096 characters.
 """
 
         response = llm.invoke(prompt)
-
-        argument = f"Bull Analyst: {response.content}"
+        content = response.content[:4096] if len(response.content) > 4096 else response.content
+        argument = f"Bull Analyst: {content}"
 
         new_investment_debate_state = {
             "history": history + "\n" + argument,

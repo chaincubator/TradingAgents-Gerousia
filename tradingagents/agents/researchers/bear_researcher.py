@@ -42,11 +42,12 @@ Conversation history of the debate: {history}
 Last bull argument: {current_response}
 Reflections from similar situations and lessons learned: {past_memory_str}
 Use this information to deliver a compelling bear argument, refute the bull's claims, and engage in a dynamic debate that demonstrates the risks and weaknesses of investing in the stock. You must also address reflections and learn from lessons and mistakes you made in the past.
+Be concise and direct. Keep your response under 4096 characters.
 """
 
         response = llm.invoke(prompt)
-
-        argument = f"Bear Analyst: {response.content}"
+        content = response.content[:4096] if len(response.content) > 4096 else response.content
+        argument = f"Bear Analyst: {content}"
 
         new_investment_debate_state = {
             "history": history + "\n" + argument,
