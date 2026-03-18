@@ -25,7 +25,7 @@ class ConditionalLogic:
         last_message = messages[-1]
         if last_message.tool_calls:
             return "tools_market_4h"
-        return "Msg Clear Market 4h"
+        return "Msg Clear Market 4H"
 
     def should_continue_social(self, state: AgentState):
         """Determine if social media analysis should continue."""
