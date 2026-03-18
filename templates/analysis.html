@@ -681,38 +681,49 @@
             document.getElementById('connectionStatus').className = 'connection-status disconnected';
         });
         
-        // Update analysis info when session starts
-        socket.on('session_state', function(data) {
-            updateAgentStatus(data.agent_status);
-            updateMessages(data.messages);
-            updateReports(data.report_sections);
-            updateProgress(data.progress, data.current_step);
-        });
-        
         // Join session room
         socket.emit('join_session', {'session_id': sessionId});
-        
-        // Handle session state updates
+
+        // Restore full history when (re)connecting — per_ticker_reports holds
+        // permanent snapshots of every completed ticker.
         socket.on('session_state', function(data) {
             updateAgentStatus(data.agent_status);
             updateMessages(data.messages);
-            updateReports(data.report_sections);
             updateProgress(data.progress, data.current_step);
+
+            // Restore permanent per-ticker groups first
+            if (data.per_ticker_reports && Object.keys(data.per_ticker_reports).length > 0) {
+                document.getElementById('reportsContainer').innerHTML = '';
+                Object.entries(data.per_ticker_reports).forEach(([ticker, sections]) => {
+                    addTickerGroup(ticker, sections);
+                });
+            } else {
+                // Single-ticker or in-progress: show current report_sections
+                updateReports(data.report_sections);
+            }
         });
-        
+
         // Handle real-time updates
         socket.on('new_message', function(message) {
             addMessage(message);
         });
-        
+
         socket.on('agent_status_update', function(data) {
             updateAgentStatusSingle(data.agent, data.status);
         });
-        
+
+        // Live section updates during streaming (transient — shown in-progress)
         socket.on('report_update', function(data) {
             updateReportSection(data.section, data.content);
         });
-        
+
+        // Permanent snapshot when a ticker's full pipeline completes
+        socket.on('ticker_complete', function(data) {
+            // Remove transient live sections (data-section) for cleanliness
+            document.querySelectorAll('[data-section]').forEach(el => el.remove());
+            addTickerGroup(data.ticker, data.sections);
+        });
+
         socket.on('analysis_info_update', function(data) {
             document.getElementById('analysisInfo').textContent = `Analyzing ${data.ticker} on ${data.analysis_date}`;
         });
@@ -803,69 +814,104 @@
             container.scrollTop = container.scrollHeight;
         }
         
+        const sectionTitles = {
+            'market_report':         'Market Analysis (5m)',
+            'market_4h_report':      'Market Analysis (4h)',
+            'sentiment_report':      'Social Sentiment',
+            'news_report':           'News Analysis',
+            'fundamentals_report':   'Fundamentals Analysis',
+            'investment_plan':       'Research Team Decision',
+            'trader_investment_plan':'Trading Plan',
+            'final_trade_decision':  'Final Trade Decision',
+        };
+
         function updateReports(reportSections) {
             const container = document.getElementById('reportsContainer');
             container.innerHTML = '';
-            
             Object.keys(reportSections).forEach(section => {
                 if (reportSections[section]) {
                     updateReportSection(section, reportSections[section]);
                 }
             });
         }
-        
+
+        // Append a permanent per-ticker group that survives across ticker iterations.
+        function addTickerGroup(ticker, sections) {
+            const container = document.getElementById('reportsContainer');
+
+            // Remove any existing group for this ticker (avoid duplicates on reconnect)
+            const existing = document.querySelector(`[data-ticker-group="${ticker}"]`);
+            if (existing) existing.remove();
+
+            const group = document.createElement('div');
+            group.setAttribute('data-ticker-group', ticker);
+            group.className = 'ticker-report-group mb-5';
+            group.innerHTML = `
+                <div class="ticker-group-header p-2 mb-3" style="background:var(--bg-header);border-radius:8px;">
+                    <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>${ticker} — Full Analysis</h5>
+                </div>`;
+
+            Object.entries(sections).forEach(([section, content]) => {
+                if (content) {
+                    const div = document.createElement('div');
+                    div.className = 'report-section mb-4';
+                    div.innerHTML = `
+                        <h6 class="text-primary">${sectionTitles[section] || section}</h6>
+                        <div class="report-content">${marked.parse(content)}</div>
+                        <hr>`;
+                    group.appendChild(div);
+                }
+            });
+
+            container.appendChild(group);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Live in-progress section (transient — may be overwritten by next ticker)
         function updateReportSection(section, content) {
             const container = document.getElementById('reportsContainer');
-            
-            // Remove existing section if it exists
-            const existingSection = document.querySelector(`[data-section="${section}"]`);
-            if (existingSection) {
-                existingSection.remove();
-            }
-            
-            const sectionElement = document.createElement('div');
-            sectionElement.setAttribute('data-section', section);
-            sectionElement.className = 'report-section mb-4';
-            
-            const sectionTitles = {
-                'market_report': 'Market Analysis',
-                'sentiment_report': 'Social Sentiment',
-                'news_report': 'News Analysis',
-                'fundamentals_report': 'Fundamentals Analysis',
-                'investment_plan': 'Research Team Decision',
-                'trader_investment_plan': 'Trading Plan',
-                'final_trade_decision': 'Portfolio Management Decision'
-            };
-            
-            sectionElement.innerHTML = `
+            const existing = document.querySelector(`[data-section="${section}"]`);
+            if (existing) existing.remove();
+
+            const el = document.createElement('div');
+            el.setAttribute('data-section', section);
+            el.className = 'report-section mb-4';
+            el.innerHTML = `
                 <h6 class="text-primary">${sectionTitles[section] || section}</h6>
                 <div class="report-content">${marked.parse(content)}</div>
-                <hr>
-            `;
-            
-            container.appendChild(sectionElement);
+                <hr>`;
+            container.appendChild(el);
             container.scrollTop = container.scrollHeight;
         }
         
         function exportReport() {
-            const reports = document.getElementById('reportsContainer').innerHTML;
+            // Prefer permanent ticker groups; fall back to whatever is in the container
+            const tickerGroups = document.querySelectorAll('[data-ticker-group]');
+            const reportsHtml = tickerGroups.length > 0
+                ? Array.from(tickerGroups).map(g => g.outerHTML).join('\n')
+                : document.getElementById('reportsContainer').innerHTML;
+
             const blob = new Blob([`
                 <!DOCTYPE html>
                 <html>
                 <head>
                     <title>TradingAgents Analysis Report</title>
                     <style>
-                        body { font-family: Arial, sans-serif; margin: 40px; }
-                        h1, h2, h3 { color: #2d3748; }
+                        body { font-family: Arial, sans-serif; margin: 40px; max-width: 960px; }
+                        h1, h2, h3, h5 { color: #2d3748; }
+                        h5 { background: #f1f5f9; padding: 8px 12px; border-radius: 6px; }
                         .report-content { line-height: 1.6; }
+                        .ticker-report-group { margin-bottom: 3rem; }
+                        table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+                        th, td { border: 1px solid #ccc; padding: 6px 12px; }
+                        th { background: #f1f5f9; }
                     </style>
                 </head>
                 <body>
                     <h1>TradingAgents Analysis Report</h1>
-                    <p>Generated on: ${new Date().toLocaleString()}</p>
-                    <p>Session ID: ${sessionId}</p>
+                    <p>Generated: ${new Date().toLocaleString()} &nbsp;|&nbsp; Session: ${sessionId}</p>
                     <hr>
-                    ${reports}
+                    ${reportsHtml}
                 </body>
                 </html>
             `], { type: 'text/html' });

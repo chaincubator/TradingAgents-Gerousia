@@ -43,7 +43,8 @@ class MessageBuffer:
         self.final_report = None  # Store the complete final report
         self.agent_status = {
             # Analyst Team
-            "Market Analyst": "pending",
+            "Market Analyst (5m)": "pending",
+            "Market Analyst (4h)": "pending",
             "Social Analyst": "pending",
             "News Analyst": "pending",
             "Fundamentals Analyst": "pending",
@@ -63,6 +64,7 @@ class MessageBuffer:
         self.current_agent = None
         self.report_sections = {
             "market_report": None,
+            "market_4h_report": None,
             "sentiment_report": None,
             "news_report": None,
             "fundamentals_report": None,
@@ -103,7 +105,8 @@ class MessageBuffer:
         if latest_section and latest_content:
             # Format the current section for display
             section_titles = {
-                "market_report": "Market Analysis",
+                "market_report": "Market Analysis (5m)",
+                "market_4h_report": "Market Analysis (4h)",
                 "sentiment_report": "Social Sentiment",
                 "news_report": "News Analysis",
                 "fundamentals_report": "Fundamentals Analysis",
@@ -736,6 +739,29 @@ def extract_content_string(content):
     else:
         return str(content)
 
+_SECTION_HEADINGS = {
+    "market_report":        "## Market Analysis (5m)",
+    "market_4h_report":     "## Market Analysis (4h)",
+    "sentiment_report":     "## Social Sentiment",
+    "news_report":          "## News Analysis",
+    "fundamentals_report":  "## Fundamentals Analysis",
+    "investment_plan":      "## Research Team Decision",
+    "trader_investment_plan": "## Trading Plan",
+    "final_trade_decision": "## Final Trade Decision",
+}
+
+
+def _save_combined_report(ticker: str, analysis_date: str,
+                          final_state: dict, results_dir: Path) -> None:
+    """Write results/{ticker}/{date}/full_report.md combining all sections."""
+    parts = [f"# {ticker} — Full Analysis Report\n**Date:** {analysis_date}\n\n---\n"]
+    for key, heading in _SECTION_HEADINGS.items():
+        content = final_state.get(key, "")
+        if content:
+            parts.append(f"{heading}\n\n{content}\n\n---\n")
+    (results_dir / "full_report.md").write_text("\n".join(parts), encoding="utf-8")
+
+
 def _patch_message_buffer(log_file: Path, report_dir: Path):
     """Re-patch message_buffer instance methods to write to per-ticker files.
 
@@ -965,6 +991,12 @@ def run_analysis():
 
             final_state = _run_ticker_analysis(ticker, analysis_date, selections, graph, layout)
             symbol_results[ticker] = final_state
+
+            # Save combined full_report.md for this ticker
+            _save_combined_report(ticker, analysis_date, final_state, results_dir)
+            message_buffer.add_message(
+                "System", f"[{ticker}] Full report saved → {results_dir}/full_report.md"
+            )
 
         # Portfolio MVO — only when multiple tickers were analysed
         portfolio_report = None

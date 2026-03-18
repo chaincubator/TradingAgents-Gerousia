@@ -338,6 +338,18 @@ def run_analysis_background(session_id: str, config: Dict):
 
             buffer.add_message("System", f"[{ticker}] Analysis finished.")
 
+            # Snapshot all non-null sections for this ticker and store persistently
+            ticker_sections = {k: v for k, v in buffer.report_sections.items() if v}
+            if 'per_ticker_reports' not in analysis_sessions[session_id]:
+                analysis_sessions[session_id]['per_ticker_reports'] = {}
+            analysis_sessions[session_id]['per_ticker_reports'][ticker] = ticker_sections
+
+            # Emit permanent per-ticker snapshot to the frontend
+            socketio.emit('ticker_complete', {
+                'ticker': ticker,
+                'sections': ticker_sections,
+            }, room=session_id)
+
         # Portfolio MVO — only when multiple tickers analysed
         if len(tickers) > 1 and len(symbol_results) > 1:
             from tradingagents.agents.portfolio.mvo import run_portfolio_mvo
@@ -387,7 +399,8 @@ def handle_join_session(data):
             'agent_status': buffer.agent_status,
             'report_sections': buffer.report_sections,
             'progress': buffer.progress,
-            'current_step': buffer.current_step
+            'current_step': buffer.current_step,
+            'per_ticker_reports': analysis_sessions[session_id].get('per_ticker_reports', {}),
         })
 
 if __name__ == '__main__':
