@@ -21,38 +21,60 @@ def create_research_manager(llm, memory):
         for i, rec in enumerate(past_memories, 1):
             past_memory_str += rec["recommendation"] + "\n\n"
 
-        prompt = f"""As the portfolio manager and debate facilitator, your role is to critically evaluate this round of debate and make a definitive decision: align with the bear analyst, the bull analyst, or choose Hold only if it is strongly justified based on the arguments presented.
+        cta_perspective        = investment_debate_state.get("cta_perspective", "")
+        contrarian_perspective = investment_debate_state.get("contrarian_perspective", "")
+        retail_perspective     = investment_debate_state.get("retail_perspective", "")
 
-Summarize the key points from both sides concisely, focusing on the most compelling evidence or reasoning. Your recommendation—Buy, Sell, or Hold—must be clear and actionable. Avoid defaulting to Hold simply because both sides have valid points; commit to a stance grounded in the debate's strongest arguments.
+        prompt = f"""You are the Research Manager — the senior portfolio decision-maker who synthesises input from a five-strong research panel before issuing a definitive investment recommendation.
 
-Additionally, develop a detailed investment plan for the trader. This should include:
+## Your research panel
+1. **Bull Analyst** — fundamental / growth case for the asset
+2. **Bear Analyst** — fundamental / risk case against the asset
+3. **CTA Researcher** — systematic trend-following, momentum, and price-action view
+4. **Contrarian Researcher** — asymmetric / low-delta view; fades consensus extremes; seeks high-payout setups
+5. **Retail Researcher** — FOMO dynamics, retail participation, social sentiment, short/gamma squeeze signals
 
-Your Recommendation: A decisive stance supported by the most convincing arguments.
-Rationale: An explanation of why these arguments lead to your conclusion.
-Strategic Actions: Concrete steps for implementing the recommendation.
-Take into account your past mistakes on similar situations. Use these insights to refine your decision-making and ensure you are learning and improving. Present your analysis conversationally, as if speaking naturally, without special formatting. 
+## Your mandate
+Weigh all five perspectives and make ONE clear, actionable recommendation: **Buy, Sell, or Hold**.
+- Do not default to Hold simply because views conflict. Make a decision.
+- Identify which 1–2 perspectives carry the most weight given current market conditions and explain why.
+- Note where perspectives converge (high-conviction signal) and where they diverge (uncertainty / smaller size).
+- Produce a concrete investment plan for the Trader including rationale and strategic actions.
 
-Here are your past reflections on mistakes:
-\"{past_memory_str}\"
+## Inputs
 
-Iterative analysis context (scored history from prior runs):
+**Past reflections on similar situations:**
+{past_memory_str}
+
+**Iterative context (scored history from prior runs):**
 {past_analysis}
 
-Here is the debate:
-Debate History:
+**Full debate history (Bull + Bear):**
 {history}
 
-Be concise and direct. Keep your response under 4096 characters."""
+**CTA Researcher perspective:**
+{cta_perspective}
+
+**Contrarian Researcher perspective:**
+{contrarian_perspective}
+
+**Retail Researcher perspective:**
+{retail_perspective}
+
+Present your analysis conversationally, without special formatting. Be concise and direct. Keep your response under 4096 characters."""
         response = llm.invoke(prompt)
         content = response.content[:4096] if len(response.content) > 4096 else response.content
 
         new_investment_debate_state = {
-            "judge_decision": content,
-            "history": investment_debate_state.get("history", ""),
-            "bear_history": investment_debate_state.get("bear_history", ""),
-            "bull_history": investment_debate_state.get("bull_history", ""),
-            "current_response": content,
-            "count": investment_debate_state["count"],
+            "judge_decision":         content,
+            "history":                investment_debate_state.get("history", ""),
+            "bear_history":           investment_debate_state.get("bear_history", ""),
+            "bull_history":           investment_debate_state.get("bull_history", ""),
+            "current_response":       content,
+            "count":                  investment_debate_state["count"],
+            "cta_perspective":        investment_debate_state.get("cta_perspective", ""),
+            "contrarian_perspective": investment_debate_state.get("contrarian_perspective", ""),
+            "retail_perspective":     investment_debate_state.get("retail_perspective", ""),
         }
 
         return {

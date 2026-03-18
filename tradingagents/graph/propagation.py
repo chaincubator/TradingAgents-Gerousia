@@ -32,6 +32,9 @@ class Propagator:
                     "current_response": "",
                     "judge_decision": "",
                     "count": 0,
+                    "cta_perspective": "",
+                    "contrarian_perspective": "",
+                    "retail_perspective": "",
                 }
             ),
             "risk_debate_state": RiskDebateState(

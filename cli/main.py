@@ -51,6 +51,9 @@ class MessageBuffer:
             # Research Team
             "Bull Researcher": "pending",
             "Bear Researcher": "pending",
+            "CTA Researcher": "pending",
+            "Contrarian Researcher": "pending",
+            "Retail Researcher": "pending",
             "Research Manager": "pending",
             # Trading Team
             "Trader": "pending",

@@ -102,6 +102,9 @@ class GraphSetup:
         bear_researcher_node = create_bear_researcher(
             self.quick_thinking_llm, self.bear_memory
         )
+        cta_researcher_node        = create_cta_researcher(self.quick_thinking_llm)
+        contrarian_researcher_node = create_contrarian_researcher(self.quick_thinking_llm)
+        retail_researcher_node     = create_retail_researcher(self.quick_thinking_llm)
         research_manager_node = create_research_manager(
             self.deep_thinking_llm, self.invest_judge_memory
         )
@@ -141,6 +144,9 @@ class GraphSetup:
         # Add other nodes
         workflow.add_node("Bull Researcher", bull_researcher_node)
         workflow.add_node("Bear Researcher", bear_researcher_node)
+        workflow.add_node("CTA Researcher", cta_researcher_node)
+        workflow.add_node("Contrarian Researcher", contrarian_researcher_node)
+        workflow.add_node("Retail Researcher", retail_researcher_node)
         workflow.add_node("Research Manager", research_manager_node)
         workflow.add_node("Trader", trader_node)
         workflow.add_node("Risky Analyst", risky_analyst)
@@ -179,18 +185,22 @@ class GraphSetup:
             "Bull Researcher",
             self.conditional_logic.should_continue_debate,
             {
-                "Bear Researcher": "Bear Researcher",
-                "Research Manager": "Research Manager",
+                "Bear Researcher":  "Bear Researcher",
+                "CTA Researcher":   "CTA Researcher",
             },
         )
         workflow.add_conditional_edges(
             "Bear Researcher",
             self.conditional_logic.should_continue_debate,
             {
-                "Bull Researcher": "Bull Researcher",
-                "Research Manager": "Research Manager",
+                "Bull Researcher":  "Bull Researcher",
+                "CTA Researcher":   "CTA Researcher",
             },
         )
+        # Extended research panel runs sequentially after bull/bear debate
+        workflow.add_edge("CTA Researcher",        "Contrarian Researcher")
+        workflow.add_edge("Contrarian Researcher", "Retail Researcher")
+        workflow.add_edge("Retail Researcher",     "Research Manager")
         workflow.add_edge("Research Manager", "Trader")
         workflow.add_edge("Trader", "Risky Analyst")
         workflow.add_conditional_edges(

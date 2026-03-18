@@ -12,7 +12,10 @@ def create_trader(llm, memory):
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
 
-        past_analysis = state.get("past_analysis", "")
+        past_analysis          = state.get("past_analysis", "")
+        cta_perspective        = state["investment_debate_state"].get("cta_perspective", "")
+        contrarian_perspective = state["investment_debate_state"].get("contrarian_perspective", "")
+        retail_perspective     = state["investment_debate_state"].get("retail_perspective", "")
         curr_situation = f"{market_research_report}\n\n{sentiment_report}\n\n{news_report}\n\n{fundamentals_report}"
         past_memories = memory.get_memories(curr_situation, n_matches=2)
 
@@ -35,6 +38,11 @@ def create_trader(llm, memory):
 
 Iterative context — scored history from previous runs on this asset:
 {past_analysis}
+
+Additional research perspectives to consider alongside the investment plan:
+- CTA / Trend-following view: {cta_perspective[:600] if cta_perspective else "Not available"}
+- Contrarian / Asymmetric view: {contrarian_perspective[:600] if contrarian_perspective else "Not available"}
+- Retail / FOMO dynamics view: {retail_perspective[:600] if retail_perspective else "Not available"}
 
 Do not forget to utilize lessons from past decisions. Reflections from similar situations: {past_memory_str}
 

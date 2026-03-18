@@ -17,8 +17,11 @@ class InvestDebateState(TypedDict):
     ]  # Bullish Conversation history
     history: Annotated[str, "Conversation history"]  # Conversation history
     current_response: Annotated[str, "Latest response"]  # Last response
-    judge_decision: Annotated[str, "Final judge decision"]  # Last response
-    count: Annotated[int, "Length of the current conversation"]  # Conversation length
+    judge_decision:         Annotated[str, "Final judge decision"]
+    count:                  Annotated[int, "Length of the current conversation"]
+    cta_perspective:        Annotated[str, "CTA trend-following researcher perspective"]
+    contrarian_perspective: Annotated[str, "Contrarian low-delta researcher perspective"]
+    retail_perspective:     Annotated[str, "Retail madness / FOMO researcher perspective"]
 
 
 # Risk management team state
