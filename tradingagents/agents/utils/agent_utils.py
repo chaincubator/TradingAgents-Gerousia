@@ -492,6 +492,25 @@ class Toolkit:
 
     @staticmethod
     @tool
+    def get_treeofalpha_sentiment(
+        symbol: Annotated[str, "Cryptocurrency symbol like BTC, ETH, ADA"],
+        curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
+        look_back_days: Annotated[int, "How many days to look back"] = 7,
+    ) -> str:
+        """
+        Get social sentiment for a cryptocurrency from Tree of Alpha,
+        including aggregated news and social media posts.
+        Args:
+            symbol (str): Crypto symbol (e.g., 'BTC', 'ETH', 'ADA')
+            curr_date (str): Current date in yyyy-mm-dd format
+            look_back_days (int): Number of days to look back, default is 7
+        Returns:
+            str: Social sentiment report with news and social posts
+        """
+        return interface.get_social_sentiment_treeofalpha(symbol, curr_date, look_back_days)
+
+    @staticmethod
+    @tool
     def get_crypto_fundamentals_analysis(
         symbol: Annotated[str, "Cryptocurrency symbol like BTC, ETH, ADA"],
         curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],

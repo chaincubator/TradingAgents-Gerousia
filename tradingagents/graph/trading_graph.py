@@ -173,6 +173,7 @@ class TradingAgentsGraph:
                     self.toolkit.get_reddit_stock_info,
                     # Crypto tools
                     self.toolkit.get_crypto_news_analysis,
+                    self.toolkit.get_treeofalpha_sentiment,
                 ]
             ),
             "news": ToolNode(

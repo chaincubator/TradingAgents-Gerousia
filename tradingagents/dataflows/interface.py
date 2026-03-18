@@ -8,6 +8,7 @@ from .coingecko_utils import (
     get_crypto_market_data,
     get_crypto_news,
 )
+from .treeofalpha_utils import get_treeofalpha_sentiment
 from .binance_utils import (
     get_binance_price_history,
     get_binance_technical_analysis,
@@ -891,6 +892,25 @@ def get_crypto_news_analysis(
         String containing news and trends
     """
     return get_crypto_news(symbol, curr_date, look_back_days)
+
+
+def get_social_sentiment_treeofalpha(
+    symbol: Annotated[str, "Cryptocurrency symbol like BTC, ETH, ADA"],
+    curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
+    look_back_days: Annotated[int, "How many days to look back"] = 7,
+) -> str:
+    """
+    Get social sentiment for a cryptocurrency from Tree of Alpha (news + social posts).
+
+    Args:
+        symbol:         Crypto symbol (e.g., 'BTC', 'ETH', 'ADA')
+        curr_date:      Current date in yyyy-mm-dd format
+        look_back_days: Number of days to look back
+
+    Returns:
+        Formatted social sentiment report from Tree of Alpha
+    """
+    return get_treeofalpha_sentiment(symbol, curr_date, look_back_days)
 
 
 def get_crypto_fundamentals_analysis(
