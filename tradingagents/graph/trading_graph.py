@@ -210,7 +210,6 @@ class TradingAgentsGraph:
                 [
                     # Stock tools (online)
                     self.toolkit.get_global_news_openai,
-                    self.toolkit.get_google_news,
                     # Stock tools (offline)
                     self.toolkit.get_finnhub_news,
                     self.toolkit.get_reddit_news,

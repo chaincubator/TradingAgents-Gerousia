@@ -59,9 +59,7 @@ def create_news_analyst(llm, toolkit):
 
         if instrument_type == "tradfi":
             info  = get_instrument_info(ticker)
-            tools = [toolkit.get_google_news]
-            if toolkit.config["online_tools"]:
-                tools = [toolkit.get_global_news_openai, toolkit.get_google_news]
+            tools = [toolkit.get_global_news_openai]
             system_message = (
                 f"You are a macro and TradFi news researcher analysing {info['name']} ({ticker.upper()}), "
                 f"a {info['type'].replace('_',' ')} instrument that trades as a perpetual future on "
@@ -73,7 +71,7 @@ def create_news_analyst(llm, toolkit):
                 "Append a concise Markdown table. Be concise. Keep under 4096 characters."
             )
         elif instrument_type == "crypto":
-            tools = [toolkit.get_crypto_news_analysis, toolkit.get_google_news]
+            tools = [toolkit.get_crypto_news_analysis]
             system_message = (
                 "You are a cryptocurrency news researcher tasked with analyzing recent news and trends over the past week that affect cryptocurrency markets. Please write a comprehensive report of the current state of the crypto world and broader macroeconomic factors that are relevant for cryptocurrency trading. "
                 "Focus on crypto-specific news including: regulatory developments, institutional adoption, technology updates, market sentiment, DeFi trends, NFT markets, blockchain developments, and major crypto exchange news. "
@@ -84,12 +82,11 @@ def create_news_analyst(llm, toolkit):
         else:
             # Stock
             if toolkit.config["online_tools"]:
-                tools = [toolkit.get_global_news_openai, toolkit.get_google_news]
+                tools = [toolkit.get_global_news_openai]
             else:
                 tools = [
                     toolkit.get_finnhub_news,
                     toolkit.get_reddit_news,
-                    toolkit.get_google_news,
                 ]
             system_message = (
                 "You are a news researcher tasked with analyzing recent news and trends over the past week. Please write a comprehensive report of the current state of the world that is relevant for trading and macroeconomics. Look at news from EODHD, and finnhub to be comprehensive. Do not simply state the trends are mixed, provide detailed and finegrained analysis and insights that may help traders make decisions."

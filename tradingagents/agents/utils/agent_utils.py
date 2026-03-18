@@ -60,10 +60,13 @@ class Toolkit:
         Returns:
             str: A formatted dataframe containing the latest global news from Reddit in the specified time frame.
         """
-        
-        global_news_result = interface.get_reddit_global_news(curr_date, 7, 5)
-
-        return global_news_result
+        if not curr_date or curr_date.strip() == "":
+            return "Reddit global news unavailable: no date provided."
+        try:
+            global_news_result = interface.get_reddit_global_news(curr_date, 7, 5)
+            return global_news_result or "No Reddit global news found for this date."
+        except Exception as e:
+            return f"Reddit global news unavailable: {type(e).__name__}. Continuing analysis without it."
 
     @staticmethod
     @tool
@@ -84,27 +87,25 @@ class Toolkit:
         Returns:
             str: A formatted dataframe containing news about the company within the date range from start_date to end_date
         """
-
-        end_date_str = end_date
-
-        end_date = datetime.strptime(end_date, "%Y-%m-%d")
-        start_date = datetime.strptime(start_date, "%Y-%m-%d")
-        look_back_days = (end_date - start_date).days
-
-        finnhub_news_result = interface.get_finnhub_news(
-            ticker, end_date_str, look_back_days
-        )
-
-        return finnhub_news_result
+        if not ticker or not start_date or not end_date:
+            return "Finnhub news unavailable: missing ticker or date arguments."
+        try:
+            end_date_str = end_date
+            end_dt   = datetime.strptime(end_date, "%Y-%m-%d")
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            look_back_days = (end_dt - start_dt).days
+            finnhub_news_result = interface.get_finnhub_news(
+                ticker, end_date_str, look_back_days
+            )
+            return finnhub_news_result or f"No Finnhub news found for {ticker}."
+        except Exception as e:
+            return f"Finnhub news unavailable for {ticker}: {type(e).__name__}. Continuing analysis without it."
 
     @staticmethod
     @tool
     def get_reddit_stock_info(
-        ticker: Annotated[
-            str,
-            "Ticker of a company. e.g. AAPL, TSM",
-        ],
-        curr_date: Annotated[str, "Current date you want to get news for"],
+        ticker: Annotated[str, "Ticker of a company. e.g. AAPL, TSM"],
+        curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
     ) -> str:
         """
         Retrieve the latest news about a given stock from Reddit, given the current date.
@@ -114,10 +115,17 @@ class Toolkit:
         Returns:
             str: A formatted dataframe containing the latest news about the company on the given date
         """
-
-        stock_news_results = interface.get_reddit_company_news(ticker, curr_date, 7, 5)
-
-        return stock_news_results
+        if not ticker or ticker.strip() == "":
+            return "Reddit stock info unavailable: ticker symbol is required."
+        if not curr_date or curr_date.strip() == "":
+            return "Reddit stock info unavailable: date is required."
+        try:
+            stock_news_results = interface.get_reddit_company_news(
+                ticker.strip().upper(), curr_date.strip(), 7, 5
+            )
+            return stock_news_results or f"No Reddit data found for {ticker} on {curr_date}."
+        except Exception as e:
+            return f"Reddit data unavailable for {ticker}: {type(e).__name__}. Continuing analysis without it."
 
     @staticmethod
     @tool
@@ -340,26 +348,6 @@ class Toolkit:
         )
 
         return data_income_stmt
-
-    @staticmethod
-    @tool
-    def get_google_news(
-        query: Annotated[str, "Query to search with"],
-        curr_date: Annotated[str, "Curr date in yyyy-mm-dd format"],
-    ):
-        """
-        Retrieve the latest news from Google News based on a query and date range.
-        Args:
-            query (str): Query to search with
-            curr_date (str): Current date in yyyy-mm-dd format
-            look_back_days (int): How many days to look back
-        Returns:
-            str: A formatted string containing the latest news from Google News based on the query and date range.
-        """
-
-        google_news_results = interface.get_google_news(query, curr_date, 7)
-
-        return google_news_results
 
     @staticmethod
     @tool

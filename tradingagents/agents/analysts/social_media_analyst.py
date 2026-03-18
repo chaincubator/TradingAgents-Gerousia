@@ -16,9 +16,9 @@ def create_social_media_analyst(llm, toolkit):
 
         if instrument_type == "tradfi":
             info  = get_instrument_info(ticker)
-            tools = [toolkit.get_treeofalpha_sentiment, toolkit.get_google_news]
+            tools = [toolkit.get_treeofalpha_sentiment]
             if toolkit.config["online_tools"]:
-                tools = [toolkit.get_global_news_openai, toolkit.get_google_news]
+                tools = [toolkit.get_global_news_openai]
             system_message = (
                 f"You are a TradFi market sentiment analyst covering {info['name']} ({ticker.upper()}), "
                 f"a {info['type'].replace('_',' ')} that trades as a perpetual future on "

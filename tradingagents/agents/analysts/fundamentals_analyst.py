@@ -60,7 +60,7 @@ def create_fundamentals_analyst(llm, toolkit):
 
         if instrument_type == "tradfi":
             info  = get_instrument_info(ticker)
-            tools = [toolkit.get_fundamentals_openai] if toolkit.config["online_tools"] else [toolkit.get_google_news]
+            tools = [toolkit.get_fundamentals_openai] if toolkit.config["online_tools"] else [toolkit.get_tradfi_technical_analysis]
             system_message = (
                 f"You are a TradFi fundamentals analyst specialising in {info['type'].replace('_',' ')} instruments. "
                 f"Analysing {info['name']} ({ticker.upper()}), which trades as a perpetual future on "
