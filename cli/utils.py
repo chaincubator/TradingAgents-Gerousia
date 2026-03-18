@@ -161,10 +161,23 @@ def select_shallow_thinking_agent(provider) -> str:
             ("llama3.2 local", "llama3.2"),
         ],
         "qwen": [
-            ("Qwen Turbo - Fast and cost-effective", "qwen-turbo-latest"),
-            ("Qwen Plus - Balanced performance and speed", "qwen-plus-latest"),
-            ("Qwen3.5 122B-A10B - Hybrid MoE model", "qwen3.5-122b-a10b"),
-            ("Qwen VL Plus - Vision Language model", "qwen-vl-plus-2025-05-07"),
+            # Turbo / Plus (fast)
+            ("Qwen Turbo Latest - Fast and cost-effective",          "qwen-turbo-latest"),
+            ("Qwen Plus Latest - Balanced performance",              "qwen-plus-latest"),
+            ("Qwen Plus 2025-07-28 - Latest Qwen Plus snapshot",     "qwen-plus-2025-07-28"),
+            ("Qwen Long - Ultra-long context (up to 10M tokens)",    "qwen-long"),
+            # Qwen2.5 Instruct
+            ("Qwen2.5 7B Instruct - Lightweight, fast",              "qwen2.5-7b-instruct"),
+            ("Qwen2.5 14B Instruct - Compact capable",               "qwen2.5-14b-instruct"),
+            ("Qwen2.5 32B Instruct - Strong mid-range",              "qwen2.5-32b-instruct"),
+            ("Qwen2.5 72B Instruct - Flagship dense model",          "qwen2.5-72b-instruct"),
+            # Qwen3
+            ("Qwen3 8B - Next-gen lightweight",                      "qwen3-8b"),
+            ("Qwen3 14B - Next-gen compact",                         "qwen3-14b"),
+            ("Qwen3 32B - Strong reasoning mid-range",               "qwen3-32b"),
+            ("Qwen3.5 122B-A10B - Hybrid MoE model",                 "qwen3.5-122b-a10b"),
+            # Vision Language
+            ("Qwen VL Plus - Vision Language model",                 "qwen-vl-plus-2025-05-07"),
         ],
     }
 
@@ -229,15 +242,27 @@ def select_deep_thinking_agent(provider) -> str:
             ("qwen3", "qwen3"),
         ],
         "qwen": [
-            ("Qwen Plus - Balanced performance and speed", "qwen-plus-latest"),
-            ("Qwen Plus 2025-07-28 - Latest Qwen Plus", "qwen-plus-2025-07-28"),
-            ("Qwen Max - Highest capability model", "qwen-max-latest"),
-            ("Qwen3 Max - Qwen3 flagship model", "qwen3-max"),
-            ("Qwen3 235B-A22B - Flagship MoE reasoning model", "qwen3-235b-a22b"),
-            ("Qwen3.5 122B-A10B - Hybrid MoE model", "qwen3.5-122b-a10b"),
-            ("Qwen VL Plus - Vision Language model", "qwen-vl-plus-2025-05-07"),
-            ("Qwen VL OCR - Vision Language OCR model", "qwen-vl-ocr-2025-11-20"),
-            ("Qwen3 VL 235B-A22B Thinking - Multimodal reasoning", "qwen3-vl-235b-a22b-thinking"),
+            # Plus / Max
+            ("Qwen Plus Latest - Balanced performance",              "qwen-plus-latest"),
+            ("Qwen Plus 2025-07-28 - Latest Qwen Plus snapshot",     "qwen-plus-2025-07-28"),
+            ("Qwen Max Latest - Highest capability",                 "qwen-max-latest"),
+            ("Qwen Long - Ultra-long context (up to 10M tokens)",    "qwen-long"),
+            # Qwen2.5 Instruct
+            ("Qwen2.5 32B Instruct - Strong mid-range",              "qwen2.5-32b-instruct"),
+            ("Qwen2.5 72B Instruct - Flagship dense model",          "qwen2.5-72b-instruct"),
+            # QwQ Reasoning
+            ("QwQ 32B - Dedicated reasoning model",                  "qwq-32b"),
+            ("QwQ Plus - Enhanced reasoning model",                  "qwq-plus"),
+            # Qwen3
+            ("Qwen3 32B - Strong reasoning mid-range",               "qwen3-32b"),
+            ("Qwen3 30B-A3B - MoE efficient reasoning",              "qwen3-30b-a3b"),
+            ("Qwen3 Max - Qwen3 flagship",                           "qwen3-max"),
+            ("Qwen3 235B-A22B - Flagship MoE reasoning",             "qwen3-235b-a22b"),
+            ("Qwen3.5 122B-A10B - Hybrid MoE model",                 "qwen3.5-122b-a10b"),
+            # Vision Language
+            ("Qwen VL Plus - Vision Language model",                 "qwen-vl-plus-2025-05-07"),
+            ("Qwen VL OCR - Vision Language OCR model",              "qwen-vl-ocr-2025-11-20"),
+            ("Qwen3 VL 235B Thinking - Multimodal reasoning",        "qwen3-vl-235b-a22b-thinking"),
         ],
     }
     

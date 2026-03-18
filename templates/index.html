@@ -814,21 +814,46 @@
                 },
                 'qwen': {
                     shallow: [
-                        {value: 'qwen-turbo-latest', text: 'Qwen Turbo - Fast and cost-effective'},
-                        {value: 'qwen-plus-latest', text: 'Qwen Plus - Balanced performance and speed'},
-                        {value: 'qwen3.5-122b-a10b', text: 'Qwen3.5 122B-A10B - Hybrid MoE model'},
+                        // ── Qwen Turbo / Plus (fast) ──────────────────────────
+                        {value: 'qwen-turbo-latest',       text: 'Qwen Turbo Latest - Fast and cost-effective'},
+                        {value: 'qwen-plus-latest',        text: 'Qwen Plus Latest - Balanced performance'},
+                        {value: 'qwen-plus-2025-07-28',    text: 'Qwen Plus 2025-07-28 - Latest Qwen Plus snapshot'},
+                        {value: 'qwen-long',               text: 'Qwen Long - Ultra-long context (up to 10M tokens)'},
+                        // ── Qwen2.5 Instruct ──────────────────────────────────
+                        {value: 'qwen2.5-7b-instruct',     text: 'Qwen2.5 7B Instruct - Lightweight, fast'},
+                        {value: 'qwen2.5-14b-instruct',    text: 'Qwen2.5 14B Instruct - Compact capable model'},
+                        {value: 'qwen2.5-32b-instruct',    text: 'Qwen2.5 32B Instruct - Strong mid-range model'},
+                        {value: 'qwen2.5-72b-instruct',    text: 'Qwen2.5 72B Instruct - Flagship dense model'},
+                        // ── Qwen3 ─────────────────────────────────────────────
+                        {value: 'qwen3-8b',                text: 'Qwen3 8B - Next-gen lightweight'},
+                        {value: 'qwen3-14b',               text: 'Qwen3 14B - Next-gen compact'},
+                        {value: 'qwen3-32b',               text: 'Qwen3 32B - Strong reasoning mid-range'},
+                        {value: 'qwen3.5-122b-a10b',       text: 'Qwen3.5 122B-A10B - Hybrid MoE model'},
+                        // ── Vision Language ───────────────────────────────────
                         {value: 'qwen-vl-plus-2025-05-07', text: 'Qwen VL Plus - Vision Language model'}
                     ],
                     deep: [
-                        {value: 'qwen-plus-latest', text: 'Qwen Plus - Balanced performance and speed'},
-                        {value: 'qwen-plus-2025-07-28', text: 'Qwen Plus 2025-07-28 - Latest Qwen Plus'},
-                        {value: 'qwen-max-latest', text: 'Qwen Max - Highest capability model'},
-                        {value: 'qwen3-max', text: 'Qwen3 Max - Qwen3 flagship model'},
-                        {value: 'qwen3-235b-a22b', text: 'Qwen3 235B-A22B - Flagship MoE reasoning model'},
-                        {value: 'qwen3.5-122b-a10b', text: 'Qwen3.5 122B-A10B - Hybrid MoE model'},
-                        {value: 'qwen-vl-plus-2025-05-07', text: 'Qwen VL Plus - Vision Language model'},
-                        {value: 'qwen-vl-ocr-2025-11-20', text: 'Qwen VL OCR - Vision Language OCR model'},
-                        {value: 'qwen3-vl-235b-a22b-thinking', text: 'Qwen3 VL 235B-A22B Thinking - Multimodal reasoning'}
+                        // ── Qwen Plus / Max ───────────────────────────────────
+                        {value: 'qwen-plus-latest',        text: 'Qwen Plus Latest - Balanced performance'},
+                        {value: 'qwen-plus-2025-07-28',    text: 'Qwen Plus 2025-07-28 - Latest snapshot'},
+                        {value: 'qwen-max-latest',         text: 'Qwen Max Latest - Highest capability'},
+                        {value: 'qwen-long',               text: 'Qwen Long - Ultra-long context (up to 10M tokens)'},
+                        // ── Qwen2.5 Instruct ──────────────────────────────────
+                        {value: 'qwen2.5-32b-instruct',    text: 'Qwen2.5 32B Instruct - Strong mid-range'},
+                        {value: 'qwen2.5-72b-instruct',    text: 'Qwen2.5 72B Instruct - Flagship dense model'},
+                        // ── QwQ Reasoning ─────────────────────────────────────
+                        {value: 'qwq-32b',                 text: 'QwQ 32B - Dedicated reasoning model'},
+                        {value: 'qwq-plus',                text: 'QwQ Plus - Enhanced reasoning model'},
+                        // ── Qwen3 ─────────────────────────────────────────────
+                        {value: 'qwen3-32b',               text: 'Qwen3 32B - Strong reasoning mid-range'},
+                        {value: 'qwen3-30b-a3b',           text: 'Qwen3 30B-A3B - MoE efficient reasoning'},
+                        {value: 'qwen3-max',               text: 'Qwen3 Max - Qwen3 flagship'},
+                        {value: 'qwen3-235b-a22b',         text: 'Qwen3 235B-A22B - Flagship MoE reasoning'},
+                        {value: 'qwen3.5-122b-a10b',       text: 'Qwen3.5 122B-A10B - Hybrid MoE model'},
+                        // ── Vision Language ───────────────────────────────────
+                        {value: 'qwen-vl-plus-2025-05-07', text: 'Qwen VL Plus - Vision Language'},
+                        {value: 'qwen-vl-ocr-2025-11-20',  text: 'Qwen VL OCR - Vision Language OCR'},
+                        {value: 'qwen3-vl-235b-a22b-thinking', text: 'Qwen3 VL 235B Thinking - Multimodal reasoning'}
                     ]
                 },
                 'kimi': {
