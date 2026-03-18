@@ -1,5 +1,6 @@
 import time
 import json
+from tradingagents.agents.utils.thinking import strip_thinking
 
 
 def create_risky_debator(llm):
@@ -35,7 +36,7 @@ Here is the current conversation history: {history} Here are the last arguments 
 Engage actively by addressing any specific concerns raised, refuting the weaknesses in their logic, and asserting the benefits of risk-taking to outpace market norms. Maintain a focus on debating and persuading, not just presenting data. Challenge each counterpoint to underscore why a high-risk approach is optimal. Output conversationally as if you are speaking without any special formatting. Be concise and direct. Keep your response under 4096 characters."""
 
         response = llm.invoke(prompt)
-        content = response.content[:4096] if len(response.content) > 4096 else response.content
+        content = strip_thinking(response.content)[:4096]
         argument = f"Risky Analyst: {content}"
 
         new_risk_debate_state = {

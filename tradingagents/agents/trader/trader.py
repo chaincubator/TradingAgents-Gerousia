@@ -1,6 +1,7 @@
 import functools
 import time
 import json
+from tradingagents.agents.utils.thinking import strip_thinking
 
 
 def create_trader(llm, memory):
@@ -58,7 +59,7 @@ Be concise and direct. Keep your response under 4096 characters.""",
         ]
 
         result = llm.invoke(messages)
-        trader_content = result.content[:4096] if len(result.content) > 4096 else result.content
+        trader_content = strip_thinking(result.content)[:4096]
 
         return {
             "messages": [result],

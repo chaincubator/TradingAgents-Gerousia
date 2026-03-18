@@ -30,6 +30,64 @@ from .reflection import Reflector
 from .signal_processing import SignalProcessor
 
 
+# ── Qwen thinking-mode helpers ────────────────────────────────────────────────
+# LangChain's model_kwargs{"extra_body": ...} is not reliably forwarded to the
+# OpenAI SDK across all LangChain versions.  Instead we proxy the underlying
+# completions client directly so enable_thinking=False is injected at the HTTP
+# layer on every call, regardless of LangChain internals.
+
+class _QwenCompletionsProxy:
+    """Synchronous proxy: injects enable_thinking=False into every create() call."""
+
+    def __init__(self, completions):
+        self._c = completions
+
+    def create(self, **kwargs):
+        eb = kwargs.pop("extra_body", None) or {}
+        eb.setdefault("enable_thinking", False)
+        kwargs["extra_body"] = eb
+        return self._c.create(**kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._c, name)
+
+
+class _QwenAsyncCompletionsProxy:
+    """Async proxy: injects enable_thinking=False into every create() call."""
+
+    def __init__(self, completions):
+        self._c = completions
+
+    async def create(self, **kwargs):
+        eb = kwargs.pop("extra_body", None) or {}
+        eb.setdefault("enable_thinking", False)
+        kwargs["extra_body"] = eb
+        return await self._c.create(**kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._c, name)
+
+
+def _make_qwen_llm(model_id: str, base_url: str, api_key: str) -> ChatOpenAI:
+    """
+    Build a ChatOpenAI instance for a Qwen/DashScope model that reliably sends
+    enable_thinking=False on every API call.
+
+    The proxy wraps llm.client / llm.async_client so the injection happens at
+    the OpenAI SDK level, bypassing LangChain's model_kwargs path entirely.
+    This is necessary for QwQ and Qwen3 thinking models where omitting the
+    flag causes DashScope to return an error in non-streaming mode.
+    """
+    llm = ChatOpenAI(model=model_id, base_url=base_url, api_key=api_key)
+    # Pydantic v2 field assignment — use object.__setattr__ to bypass validation
+    object.__setattr__(llm, "client", _QwenCompletionsProxy(llm.client))
+    if hasattr(llm, "async_client") and llm.async_client is not None:
+        object.__setattr__(
+            llm, "async_client", _QwenAsyncCompletionsProxy(llm.async_client)
+        )
+    return llm
+
+
 class TradingAgentsGraph:
     """Main class that orchestrates the trading agents framework."""
 
@@ -91,20 +149,15 @@ class TradingAgentsGraph:
                 google_api_key=self.config["api_key"]
             )
         elif self.config["llm_provider"].lower() == "qwen":
-            # Disable thinking mode for non-streaming inference to avoid
-            # unparseable reasoning tokens in agent responses.
-            _qwen_extra = {"model_kwargs": {"extra_body": {"enable_thinking": False}}}
-            self.deep_thinking_llm = ChatOpenAI(
-                model=self.config["deep_think_llm"],
-                base_url=self.config["backend_url"],
-                api_key=self.config["api_key"],
-                **_qwen_extra
+            self.deep_thinking_llm  = _make_qwen_llm(
+                self.config["deep_think_llm"],
+                self.config["backend_url"],
+                self.config["api_key"],
             )
-            self.quick_thinking_llm = ChatOpenAI(
-                model=self.config["quick_think_llm"],
-                base_url=self.config["backend_url"],
-                api_key=self.config["api_key"],
-                **_qwen_extra
+            self.quick_thinking_llm = _make_qwen_llm(
+                self.config["quick_think_llm"],
+                self.config["backend_url"],
+                self.config["api_key"],
             )
         elif self.config["llm_provider"].lower() in ("kimi", "minimax"):
             self.deep_thinking_llm = ChatOpenAI(

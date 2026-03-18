@@ -1,3 +1,4 @@
+from tradingagents.agents.utils.thinking import strip_thinking
 """Retail Madness Researcher — FOMO-driven retail investor behaviour perspective.
 
 Trait profile drawn from public-domain behavioural finance literature:
@@ -103,7 +104,7 @@ Speak with the energy and enthusiasm of someone who truly understands retail psy
 """
 
         response = llm.invoke(prompt)
-        content  = response.content[:4096] if len(response.content) > 4096 else response.content
+        content  = strip_thinking(response.content)[:4096]
         argument = f"Retail Researcher: {content}"
 
         new_state = {**investment_debate_state}

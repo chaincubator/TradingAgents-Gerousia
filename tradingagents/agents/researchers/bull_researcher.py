@@ -1,6 +1,7 @@
 from langchain_core.messages import AIMessage
 import time
 import json
+from tradingagents.agents.utils.thinking import strip_thinking
 
 
 def create_bull_researcher(llm, memory):
@@ -48,7 +49,7 @@ Be concise and direct. Keep your response under 4096 characters.
 """
 
         response = llm.invoke(prompt)
-        content = response.content[:4096] if len(response.content) > 4096 else response.content
+        content = strip_thinking(response.content)[:4096]
         argument = f"Bull Analyst: {content}"
 
         new_investment_debate_state = {

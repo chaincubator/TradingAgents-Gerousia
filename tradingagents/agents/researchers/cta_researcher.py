@@ -1,3 +1,4 @@
+from tradingagents.agents.utils.thinking import strip_thinking
 """CTA (Commodity Trading Advisor) Researcher — systematic trend-following perspective.
 
 Trait profile drawn from public-domain knowledge of managed futures / CTA strategies:
@@ -79,7 +80,7 @@ Present your analysis conversationally. State the trend clearly, back it with sp
 """
 
         response = llm.invoke(prompt)
-        content  = response.content[:4096] if len(response.content) > 4096 else response.content
+        content  = strip_thinking(response.content)[:4096]
         argument = f"CTA Researcher: {content}"
 
         new_state = {**investment_debate_state}

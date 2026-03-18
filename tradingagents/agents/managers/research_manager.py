@@ -1,5 +1,6 @@
 import time
 import json
+from tradingagents.agents.utils.thinking import strip_thinking
 
 
 def create_research_manager(llm, memory):
@@ -63,7 +64,7 @@ Weigh all five perspectives and make ONE clear, actionable recommendation: **Buy
 
 Present your analysis conversationally, without special formatting. Be concise and direct. Keep your response under 4096 characters."""
         response = llm.invoke(prompt)
-        content = response.content[:4096] if len(response.content) > 4096 else response.content
+        content = strip_thinking(response.content)[:4096]
 
         new_investment_debate_state = {
             "judge_decision":         content,

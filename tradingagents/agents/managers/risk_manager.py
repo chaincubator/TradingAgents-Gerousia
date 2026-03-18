@@ -1,5 +1,6 @@
 import time
 import json
+from tradingagents.agents.utils.thinking import strip_thinking
 
 
 def create_risk_manager(llm, memory):
@@ -47,7 +48,7 @@ Focus on actionable insights and continuous improvement. Build on past lessons, 
 Be concise and direct. Keep your response under 4096 characters."""
 
         response = llm.invoke(prompt)
-        content = response.content[:4096] if len(response.content) > 4096 else response.content
+        content = strip_thinking(response.content)[:4096]
 
         new_risk_debate_state = {
             "judge_decision": content,

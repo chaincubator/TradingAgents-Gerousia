@@ -1,3 +1,4 @@
+from tradingagents.agents.utils.thinking import strip_thinking
 """Contrarian Researcher — low-delta / high-payout asymmetric perspective.
 
 Trait profile drawn from public-domain knowledge of contrarian and
@@ -94,7 +95,7 @@ Speak conversationally. Be specific about the asymmetric setup you see. If no ge
 """
 
         response = llm.invoke(prompt)
-        content  = response.content[:4096] if len(response.content) > 4096 else response.content
+        content  = strip_thinking(response.content)[:4096]
         argument = f"Contrarian Researcher: {content}"
 
         new_state = {**investment_debate_state}
