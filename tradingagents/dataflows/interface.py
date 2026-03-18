@@ -766,7 +766,7 @@ def _web_search_qwen(prompt: str, config: dict) -> str:
     response = client.chat.completions.create(
         model=config["quick_think_llm"],
         messages=[{"role": "user", "content": prompt}],
-        extra_body={"enable_search": True},
+        extra_body={"enable_search": True, "enable_thinking": False},
     )
     return response.choices[0].message.content
 

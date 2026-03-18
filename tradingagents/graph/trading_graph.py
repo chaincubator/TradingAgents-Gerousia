@@ -90,7 +90,23 @@ class TradingAgentsGraph:
                 model=self.config["quick_think_llm"],
                 google_api_key=self.config["api_key"]
             )
-        elif self.config["llm_provider"].lower() in ("qwen", "kimi", "minimax"):
+        elif self.config["llm_provider"].lower() == "qwen":
+            # Disable thinking mode for non-streaming inference to avoid
+            # unparseable reasoning tokens in agent responses.
+            _qwen_extra = {"model_kwargs": {"extra_body": {"enable_thinking": False}}}
+            self.deep_thinking_llm = ChatOpenAI(
+                model=self.config["deep_think_llm"],
+                base_url=self.config["backend_url"],
+                api_key=self.config["api_key"],
+                **_qwen_extra
+            )
+            self.quick_thinking_llm = ChatOpenAI(
+                model=self.config["quick_think_llm"],
+                base_url=self.config["backend_url"],
+                api_key=self.config["api_key"],
+                **_qwen_extra
+            )
+        elif self.config["llm_provider"].lower() in ("kimi", "minimax"):
             self.deep_thinking_llm = ChatOpenAI(
                 model=self.config["deep_think_llm"],
                 base_url=self.config["backend_url"],
