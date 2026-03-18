@@ -159,7 +159,7 @@ _CRYPTO_SYMBOLS = {
     'TON', 'ICP', 'HBAR', 'THETA', 'FIL', 'ETC', 'MKR', 'APT', 'LDO', 'OP',
     'IMX', 'GRT', 'RUNE', 'FLOW', 'EGLD', 'XTZ', 'MINA', 'ROSE', 'KAVA',
     'SUI', 'SEI', 'ARB', 'WLD', 'STX', 'INJ', 'TIA', 'PYTH', 'JUP',
-    'AGI', 'CHR', 'BANANA', 'BABY', 'SONIC', 'MON', 'SAROS', 'ROOT',
+    'AGI', 'CHR', 'BANANA', 'BABY', 'SONIC', 'MON', 'SAROS', 'ROOT', 'MORPHO',
 }
 
 # Known individual stock symbols — these fall through to stock routing
