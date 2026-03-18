@@ -53,6 +53,9 @@ class AgentState(MessagesState):
 
     sender: Annotated[str, "Agent that sent this message"]
 
+    # iterative context from prior runs
+    past_analysis: Annotated[str, "Scored history and reasoning from previous analysis runs"]
+
     # research step
     market_report: Annotated[str, "Report from the 5m Market Analyst"]
     market_4h_report: Annotated[str, "Report from the 4h Market Analyst"]

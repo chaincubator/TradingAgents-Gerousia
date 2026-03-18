@@ -55,44 +55,105 @@ def _load_cached(cache_file: str) -> Optional[pd.DataFrame]:
     return df if not df.empty else None
 
 
-def _fetch_klines_raw(pair: str, interval: str, start_date: str, end_date: str,
-                      cache_dir: str, tag: str) -> Optional[pd.DataFrame]:
-    os.makedirs(cache_dir, exist_ok=True)
-    cache_file = os.path.join(cache_dir, f"{pair}-{tag}-{start_date}-{end_date}.csv")
-    cached = _load_cached(cache_file)
-    if cached is not None:
-        return cached
-    try:
-        raw = _get_client().get_historical_klines(pair, interval, start_date, end_date)
-    except Exception as e:
-        print(f"[binance_utils] Failed to fetch {tag} klines for {pair}: {e}")
-        return None
-    if not raw:
-        return None
+def _parse_to_df(raw: list) -> pd.DataFrame:
     df = pd.DataFrame(raw, columns=_COLUMNS)
     df["open_time"] = pd.to_datetime(df["open_time"], unit="ms")
     for col in ["open", "high", "low", "close", "volume", "quote_volume"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     df["trades"] = pd.to_numeric(df["trades"], errors="coerce")
-    df = df.sort_values("open_time").reset_index(drop=True)
-    df.to_csv(cache_file, index=False)
-    return df
+    return df.sort_values("open_time").reset_index(drop=True)
+
+
+def _fetch_master(
+    symbol: str,
+    start_date: str,
+    end_date: str,
+    cache_dir: str,
+    interval_const: str,
+    interval_tag: str,
+    default_lookback_days: int,
+) -> Optional[pd.DataFrame]:
+    """
+    Incremental master-cache strategy.
+    Maintains a single {PAIR}-{INTERVAL}-master.csv per symbol.
+    Only downloads candles newer than the latest stored timestamp.
+    Returns a filtered view for [start_date, end_date].
+    """
+    os.makedirs(cache_dir, exist_ok=True)
+    pair        = _normalize_pair(symbol)
+    master_file = os.path.join(cache_dir, f"{pair}-{interval_tag}-master.csv")
+    end_dt      = datetime.strptime(end_date, "%Y-%m-%d")
+
+    existing   = _load_cached(master_file)
+    fetch_from = None
+
+    if existing is not None and not existing.empty:
+        latest_ts = existing["open_time"].max()
+        if latest_ts < end_dt:
+            # Only fetch the gap between latest cached candle and end_date
+            fetch_from = (latest_ts + timedelta(minutes=5)).strftime("%Y-%m-%d")
+        # else: master already covers end_date — no API call needed
+    else:
+        # No master yet — bootstrap from default_lookback_days back
+        bootstrap = end_dt - timedelta(days=default_lookback_days)
+        actual_start = min(datetime.strptime(start_date, "%Y-%m-%d"), bootstrap)
+        fetch_from = actual_start.strftime("%Y-%m-%d")
+
+    if fetch_from is not None:
+        try:
+            raw = _get_client().get_historical_klines(
+                pair, interval_const, fetch_from, end_date
+            )
+        except Exception as e:
+            print(f"[binance_utils] Failed to fetch {interval_tag} for {pair}: {e}")
+            raw = []
+
+        if raw:
+            new_df = _parse_to_df(raw)
+            if existing is not None and not existing.empty:
+                combined = (
+                    pd.concat([existing, new_df])
+                    .drop_duplicates("open_time")
+                    .sort_values("open_time")
+                    .reset_index(drop=True)
+                )
+            else:
+                combined = new_df
+            combined.to_csv(master_file, index=False)
+            existing = combined
+
+    if existing is None or existing.empty:
+        return None
+
+    # Return the requested date slice
+    start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+    mask = (existing["open_time"] >= start_dt) & (
+        existing["open_time"] < end_dt + timedelta(days=1)
+    )
+    result = existing[mask].reset_index(drop=True)
+    return result if not result.empty else None
 
 
 # ── Public fetch helpers ──────────────────────────────────────────────────────
 
 def fetch_klines(symbol: str, start_date: str, end_date: str,
                  cache_dir: str = "./data/binance_cache") -> Optional[pd.DataFrame]:
-    """Fetch 5m OHLCV klines from Binance API, cached locally."""
-    return _fetch_klines_raw(_normalize_pair(symbol), _INTERVAL_5M,
-                             start_date, end_date, cache_dir, "5m")
+    """
+    Fetch 5m OHLCV klines using an incremental master cache.
+    Only new candles (since the last cached timestamp) are downloaded.
+    """
+    return _fetch_master(symbol, start_date, end_date, cache_dir,
+                         _INTERVAL_5M, "5m", default_lookback_days=30)
 
 
 def fetch_4h_klines(symbol: str, start_date: str, end_date: str,
                     cache_dir: str = "./data/binance_cache") -> Optional[pd.DataFrame]:
-    """Fetch 4h OHLCV klines from Binance API, cached locally."""
-    return _fetch_klines_raw(_normalize_pair(symbol), _INTERVAL_4H,
-                             start_date, end_date, cache_dir, "4h")
+    """
+    Fetch 4h OHLCV klines using an incremental master cache.
+    Only new candles (since the last cached timestamp) are downloaded.
+    """
+    return _fetch_master(symbol, start_date, end_date, cache_dir,
+                         _INTERVAL_4H, "4h", default_lookback_days=730)
 
 
 # ── 5-minute analysis (short windows) ────────────────────────────────────────

@@ -232,12 +232,26 @@ class TradingAgentsGraph:
 
     def propagate(self, company_name, trade_date):
         """Run the trading agents graph for a company on a specific date."""
+        from tradingagents.dataflows.analysis_cache import AnalysisCache, _parse_validity_days
+        from tradingagents.agents.portfolio.mvo import _parse_tp_sl, _extract_signal
 
         self.ticker = company_name
+        cache_dir   = self.config.get("data_cache_dir", "./data")
+        binance_cache = os.path.join(cache_dir, "binance_cache")
 
-        # Initialize state
+        # ── Load persistent analysis cache ───────────────────────────────────
+        cache = AnalysisCache(company_name, cache_dir)
+
+        # Score any past recommendations whose validity has elapsed
+        n_scored = cache.score_pending(str(trade_date), binance_cache)
+        if n_scored:
+            print(f"[AnalysisCache] Scored {n_scored} past recommendation(s) for {company_name}")
+
+        past_context = cache.get_past_context()
+
+        # ── Initialize state with iterative context ───────────────────────────
         init_agent_state = self.propagator.create_initial_state(
-            company_name, trade_date
+            company_name, trade_date, past_context
         )
         args = self.propagator.get_graph_args()
 
@@ -258,6 +272,38 @@ class TradingAgentsGraph:
 
         # Store current state for reflection
         self.curr_state = final_state
+
+        # ── Save new recommendation and reasoning to cache ────────────────────
+        try:
+            trader_plan  = final_state.get("trader_investment_plan", "")
+            final_dec    = final_state.get("final_trade_decision", "")
+            tp, sl, validity = _parse_tp_sl(trader_plan)
+            signal       = _extract_signal(final_dec)
+
+            # Get entry price from the latest Binance 5m candle
+            entry_price = None
+            try:
+                from tradingagents.dataflows.binance_utils import fetch_klines
+                kdf = fetch_klines(company_name, str(trade_date), str(trade_date), binance_cache)
+                if kdf is not None and not kdf.empty:
+                    entry_price = float(kdf["close"].iloc[-1])
+            except Exception:
+                pass
+
+            cache.record_recommendation(
+                analysis_date=str(trade_date),
+                signal=signal,
+                take_profit=tp,
+                stop_loss=sl,
+                validity=validity,
+                entry_price=entry_price,
+                investment_plan=final_state.get("investment_plan", ""),
+                final_decision=final_dec,
+            )
+            cache.update_from_final_state(final_state, str(trade_date))
+            cache.save()
+        except Exception as e:
+            print(f"[AnalysisCache] Warning: could not save cache for {company_name}: {e}")
 
         # Log state
         self._log_state(trade_date, final_state)

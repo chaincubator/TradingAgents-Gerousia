@@ -12,6 +12,7 @@ def create_trader(llm, memory):
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
 
+        past_analysis = state.get("past_analysis", "")
         curr_situation = f"{market_research_report}\n\n{sentiment_report}\n\n{news_report}\n\n{fundamentals_report}"
         past_memories = memory.get_memories(curr_situation, n_matches=2)
 
@@ -32,13 +33,18 @@ def create_trader(llm, memory):
                 "role": "system",
                 "content": f"""You are a trading agent analyzing market data to make investment decisions. Based on your analysis, provide a specific recommendation to buy, sell, or hold.
 
+Iterative context — scored history from previous runs on this asset:
+{past_analysis}
+
+Do not forget to utilize lessons from past decisions. Reflections from similar situations: {past_memory_str}
+
 You MUST end your response with ALL FOUR of the following labelled lines (no exceptions):
 FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL**
 TAKE PROFIT: $<specific price level>
 STOP LOSS: $<specific price level>
 VALIDITY: <duration, e.g. "3 days", "1 week", "2 weeks">
 
-Do not forget to utilize lessons from past decisions. Here are reflections from similar situations: {past_memory_str} Be concise and direct. Keep your response under 4096 characters.""",
+Be concise and direct. Keep your response under 4096 characters.""",
             },
             context,
         ]

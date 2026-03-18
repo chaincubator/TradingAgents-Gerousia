@@ -7,6 +7,7 @@ def create_research_manager(llm, memory):
         history = state["investment_debate_state"].get("history", "")
         market_research_report = state["market_report"]
         market_4h_report = state.get("market_4h_report", "")
+        past_analysis = state.get("past_analysis", "")
         sentiment_report = state["sentiment_report"]
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
@@ -33,6 +34,9 @@ Take into account your past mistakes on similar situations. Use these insights t
 
 Here are your past reflections on mistakes:
 \"{past_memory_str}\"
+
+Iterative analysis context (scored history from prior runs):
+{past_analysis}
 
 Here is the debate:
 Debate History:
