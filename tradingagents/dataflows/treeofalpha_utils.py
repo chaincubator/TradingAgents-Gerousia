@@ -1,8 +1,9 @@
 """Tree of Alpha social sentiment utilities.
 
-Fetches crypto news and social (Twitter/X) data from the Tree of Alpha API.
+Fetches crypto news from the Tree of Alpha API.  The /news feed aggregates
+content from multiple sources including news outlets and social media.
 API docs: https://docs.treeofalpha.com/
-API key: set the TREE_OF_ALPHA_API environment variable.
+API key:  set the TREE_OF_ALPHA_API environment variable.
 """
 
 import os
@@ -68,57 +69,34 @@ def get_treeofalpha_sentiment(
     sym = symbol.upper()
     params = {"limit": 100, "search": sym}
 
-    # ── News ──────────────────────────────────────────────────────────────
     news_data = _fetch("news", params) or []
     news_items = [
         item for item in news_data
         if start_ms <= item.get("time", 0) <= end_ms
     ]
 
-    # ── Social / Twitter ──────────────────────────────────────────────────
-    social_data = _fetch("twitter", params) or []
-    social_items = [
-        item for item in social_data
-        if start_ms <= item.get("time", 0) <= end_ms
-    ]
-
-    if not news_items and not social_items:
+    if not news_items:
         return (
-            f"No Tree of Alpha data found for {sym} "
+            f"No Tree of Alpha news found for {sym} "
             f"({start.strftime('%Y-%m-%d')} → {curr_date})."
         )
 
     lines = [
-        f"## {sym} Social Sentiment — Tree of Alpha "
-        f"({look_back_days}d ending {curr_date})\n"
+        f"## {sym} News & Sentiment — Tree of Alpha "
+        f"({look_back_days}d ending {curr_date})\n",
+        f"*{len(news_items)} items from aggregated news and social sources*\n",
     ]
 
-    if news_items:
-        lines.append(f"### News ({len(news_items)} items)\n")
-        for item in news_items[:20]:
-            ts = datetime.utcfromtimestamp(
-                item.get("time", 0) / 1000
-            ).strftime("%Y-%m-%d %H:%M UTC")
-            title = (item.get("title") or item.get("body") or "")[:200]
-            source = item.get("source", "unknown")
-            link = item.get("link") or item.get("url") or ""
-            lines.append(f"**[{ts}] {source}**: {title}")
-            if link:
-                lines.append(f"  {link}")
-            lines.append("")
-
-    if social_items:
-        lines.append(f"### Social Posts ({len(social_items)} items)\n")
-        for item in social_items[:20]:
-            ts = datetime.utcfromtimestamp(
-                item.get("time", 0) / 1000
-            ).strftime("%Y-%m-%d %H:%M UTC")
-            body = (item.get("body") or item.get("text") or "")[:200]
-            user = item.get("username") or item.get("user") or "unknown"
-            link = item.get("link") or item.get("url") or ""
-            lines.append(f"**[{ts}] @{user}**: {body}")
-            if link:
-                lines.append(f"  {link}")
-            lines.append("")
+    for item in news_items[:30]:
+        ts = datetime.utcfromtimestamp(
+            item.get("time", 0) / 1000
+        ).strftime("%Y-%m-%d %H:%M UTC")
+        title = (item.get("title") or item.get("body") or "")[:200]
+        source = item.get("source", "unknown")
+        link = item.get("link") or item.get("url") or ""
+        lines.append(f"**[{ts}] {source}**: {title}")
+        if link:
+            lines.append(f"  {link}")
+        lines.append("")
 
     return "\n".join(lines)
