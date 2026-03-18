@@ -31,6 +31,28 @@ def create_msg_delete():
     return delete_messages
 
 
+import concurrent.futures as _futures
+
+_TOOL_TIMEOUT = 30  # seconds before an external data-fetch call is abandoned
+
+
+def _timed_call(fn, *args, label: str = "", timeout: int = _TOOL_TIMEOUT, **kwargs) -> str:
+    """Run fn(*args, **kwargs) in a thread. Returns a skip message on timeout or error."""
+    with _futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(fn, *args, **kwargs)
+        try:
+            result = future.result(timeout=timeout)
+            return result if result else f"No data returned for {label or fn.__name__}."
+        except _futures.TimeoutError:
+            msg = f"[TIMEOUT] {label or fn.__name__} exceeded {timeout}s — skipped."
+            print(msg)
+            return msg
+        except Exception as e:
+            msg = f"[ERROR] {label or fn.__name__}: {type(e).__name__} — skipped."
+            print(msg)
+            return msg
+
+
 class Toolkit:
     _config = DEFAULT_CONFIG.copy()
 
@@ -60,13 +82,7 @@ class Toolkit:
         Returns:
             str: A formatted dataframe containing the latest global news from Reddit in the specified time frame.
         """
-        if not curr_date or curr_date.strip() == "":
-            return "Reddit global news unavailable: no date provided."
-        try:
-            global_news_result = interface.get_reddit_global_news(curr_date, 7, 5)
-            return global_news_result or "No Reddit global news found for this date."
-        except Exception as e:
-            return f"Reddit global news unavailable: {type(e).__name__}. Continuing analysis without it."
+        return _timed_call(interface.get_reddit_global_news, curr_date, 7, 5, label="Reddit Global News")
 
     @staticmethod
     @tool
@@ -89,17 +105,10 @@ class Toolkit:
         """
         if not ticker or not start_date or not end_date:
             return "Finnhub news unavailable: missing ticker or date arguments."
-        try:
-            end_date_str = end_date
-            end_dt   = datetime.strptime(end_date, "%Y-%m-%d")
-            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-            look_back_days = (end_dt - start_dt).days
-            finnhub_news_result = interface.get_finnhub_news(
-                ticker, end_date_str, look_back_days
-            )
-            return finnhub_news_result or f"No Finnhub news found for {ticker}."
-        except Exception as e:
-            return f"Finnhub news unavailable for {ticker}: {type(e).__name__}. Continuing analysis without it."
+        end_dt   = datetime.strptime(end_date, "%Y-%m-%d")
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        look_back_days = (end_dt - start_dt).days
+        return _timed_call(interface.get_finnhub_news, ticker, end_date, look_back_days, label=f"Finnhub News ({ticker})")
 
     @staticmethod
     @tool
@@ -119,13 +128,9 @@ class Toolkit:
             return "Reddit stock info unavailable: ticker symbol is required."
         if not curr_date or curr_date.strip() == "":
             return "Reddit stock info unavailable: date is required."
-        try:
-            stock_news_results = interface.get_reddit_company_news(
-                ticker.strip().upper(), curr_date.strip(), 7, 5
-            )
-            return stock_news_results or f"No Reddit data found for {ticker} on {curr_date}."
-        except Exception as e:
-            return f"Reddit data unavailable for {ticker}: {type(e).__name__}. Continuing analysis without it."
+        return _timed_call(interface.get_reddit_company_news,
+                           ticker.strip().upper(), curr_date.strip(), 7, 5,
+                           label=f"Reddit Stock Info ({ticker})")
 
     @staticmethod
     @tool
@@ -144,9 +149,7 @@ class Toolkit:
             str: A formatted dataframe containing the stock price data for the specified ticker symbol in the specified date range.
         """
 
-        result_data = interface.get_YFin_data(symbol, start_date, end_date)
-
-        return result_data
+        return _timed_call(interface.get_YFin_data, symbol, start_date, end_date, label="YFin Data")
 
     @staticmethod
     @tool
@@ -165,9 +168,7 @@ class Toolkit:
             str: A formatted dataframe containing the stock price data for the specified ticker symbol in the specified date range.
         """
 
-        result_data = interface.get_YFin_data_online(symbol, start_date, end_date)
-
-        return result_data
+        return _timed_call(interface.get_YFin_data_online, symbol, start_date, end_date, label="YFin Data Online")
 
     @staticmethod
     @tool
@@ -192,11 +193,7 @@ class Toolkit:
             str: A formatted dataframe containing the stock stats indicators for the specified ticker symbol and indicator.
         """
 
-        result_stockstats = interface.get_stock_stats_indicators_window(
-            symbol, indicator, curr_date, look_back_days, False
-        )
-
-        return result_stockstats
+        return _timed_call(interface.get_stock_stats_indicators_window, symbol, indicator, curr_date, look_back_days, False, label="Stock Stats Indicators")
 
     @staticmethod
     @tool
@@ -221,11 +218,7 @@ class Toolkit:
             str: A formatted dataframe containing the stock stats indicators for the specified ticker symbol and indicator.
         """
 
-        result_stockstats = interface.get_stock_stats_indicators_window(
-            symbol, indicator, curr_date, look_back_days, True
-        )
-
-        return result_stockstats
+        return _timed_call(interface.get_stock_stats_indicators_window, symbol, indicator, curr_date, look_back_days, True, label="Stock Stats Indicators Online")
 
     @staticmethod
     @tool
@@ -245,11 +238,7 @@ class Toolkit:
             str: a report of the sentiment in the past 30 days starting at curr_date
         """
 
-        data_sentiment = interface.get_finnhub_company_insider_sentiment(
-            ticker, curr_date, 30
-        )
-
-        return data_sentiment
+        return _timed_call(interface.get_finnhub_company_insider_sentiment, ticker, curr_date, 30, label="Finnhub Insider Sentiment")
 
     @staticmethod
     @tool
@@ -269,11 +258,7 @@ class Toolkit:
             str: a report of the company's insider transactions/trading information in the past 30 days
         """
 
-        data_trans = interface.get_finnhub_company_insider_transactions(
-            ticker, curr_date, 30
-        )
-
-        return data_trans
+        return _timed_call(interface.get_finnhub_company_insider_transactions, ticker, curr_date, 30, label="Finnhub Insider Transactions")
 
     @staticmethod
     @tool
@@ -295,9 +280,7 @@ class Toolkit:
             str: a report of the company's most recent balance sheet
         """
 
-        data_balance_sheet = interface.get_simfin_balance_sheet(ticker, freq, curr_date)
-
-        return data_balance_sheet
+        return _timed_call(interface.get_simfin_balance_sheet, ticker, freq, curr_date, label="SimFin Balance Sheet")
 
     @staticmethod
     @tool
@@ -319,9 +302,7 @@ class Toolkit:
                 str: a report of the company's most recent cash flow statement
         """
 
-        data_cashflow = interface.get_simfin_cashflow(ticker, freq, curr_date)
-
-        return data_cashflow
+        return _timed_call(interface.get_simfin_cashflow, ticker, freq, curr_date, label="SimFin Cashflow")
 
     @staticmethod
     @tool
@@ -343,11 +324,7 @@ class Toolkit:
                 str: a report of the company's most recent income statement
         """
 
-        data_income_stmt = interface.get_simfin_income_statements(
-            ticker, freq, curr_date
-        )
-
-        return data_income_stmt
+        return _timed_call(interface.get_simfin_income_statements, ticker, freq, curr_date, label="SimFin Income Statement")
 
     @staticmethod
     @tool
@@ -364,9 +341,7 @@ class Toolkit:
             str: A formatted string containing the latest news about the company on the given date.
         """
 
-        openai_news_results = interface.get_stock_news_openai(ticker, curr_date)
-
-        return openai_news_results
+        return _timed_call(interface.get_stock_news_openai, ticker, curr_date, label="Company News")
 
     @staticmethod
     @tool
@@ -381,9 +356,7 @@ class Toolkit:
             str: A formatted string containing the latest macroeconomic news on the given date.
         """
 
-        openai_news_results = interface.get_global_news_openai(curr_date)
-
-        return openai_news_results
+        return _timed_call(interface.get_global_news_openai, curr_date, label="Global News")
 
     @staticmethod
     @tool
@@ -400,11 +373,7 @@ class Toolkit:
             str: A formatted string containing the latest fundamental information about the company on the given date.
         """
 
-        openai_fundamentals_results = interface.get_fundamentals_openai(
-            ticker, curr_date
-        )
-
-        return openai_fundamentals_results
+        return _timed_call(interface.get_fundamentals_openai, ticker, curr_date, label="Company Fundamentals")
 
     # ===== CRYPTO TRADING TOOLS =====
 
@@ -422,7 +391,7 @@ class Toolkit:
         Returns:
             str: Comprehensive market data and analysis for the cryptocurrency
         """
-        return interface.get_crypto_market_analysis(symbol, curr_date)
+        return _timed_call(interface.get_crypto_market_analysis, symbol, curr_date, label="Crypto Market Analysis")
 
     @staticmethod
     @tool
@@ -440,7 +409,7 @@ class Toolkit:
         Returns:
             str: Historical price, volume, and market cap data
         """
-        return interface.get_crypto_price_history(symbol, curr_date, look_back_days)
+        return _timed_call(interface.get_crypto_price_history, symbol, curr_date, look_back_days, label="Crypto Price History")
 
     @staticmethod
     @tool
@@ -458,7 +427,7 @@ class Toolkit:
         Returns:
             str: Technical analysis including price trends, volume analysis, and key levels
         """
-        return interface.get_crypto_technical_analysis(symbol, curr_date, look_back_days)
+        return _timed_call(interface.get_crypto_technical_analysis, symbol, curr_date, look_back_days, label="Crypto Technical Analysis")
 
     @staticmethod
     @tool
@@ -476,7 +445,7 @@ class Toolkit:
         Returns:
             str: Monthly-aggregated OHLCV table derived from 4h bars
         """
-        return interface.get_crypto_4h_price_history(symbol, curr_date, look_back_days)
+        return _timed_call(interface.get_crypto_4h_price_history, symbol, curr_date, look_back_days, label="Crypto 4h Price History")
 
     @staticmethod
     @tool
@@ -496,7 +465,7 @@ class Toolkit:
         Returns:
             str: Technical analysis report from 4h Binance candles
         """
-        return interface.get_crypto_4h_technical_analysis(symbol, curr_date, look_back_days)
+        return _timed_call(interface.get_crypto_4h_technical_analysis, symbol, curr_date, look_back_days, label="Crypto 4h Technical Analysis")
 
     @staticmethod
     @tool
@@ -512,7 +481,7 @@ class Toolkit:
         Args:
             symbol: perp ticker (e.g. 'GOLD', 'EWY', 'SPX', 'OIL', 'TLT')
         """
-        return interface.get_tradfi_price_history(symbol, start_date, end_date)
+        return _timed_call(interface.get_tradfi_price_history, symbol, start_date, end_date, label="TradFi Price History")
 
     @staticmethod
     @tool
@@ -528,7 +497,7 @@ class Toolkit:
         Args:
             symbol: perp ticker (e.g. 'GOLD', 'EWY', 'SPX', 'OIL')
         """
-        return interface.get_tradfi_technical_analysis(symbol, curr_date, look_back_days)
+        return _timed_call(interface.get_tradfi_technical_analysis, symbol, curr_date, look_back_days, label="TradFi Technical Analysis")
 
     @staticmethod
     @tool
@@ -546,7 +515,7 @@ class Toolkit:
         Returns:
             str: News analysis and market trends for cryptocurrency
         """
-        return interface.get_crypto_news_analysis(symbol, curr_date, look_back_days)
+        return _timed_call(interface.get_crypto_news_analysis, symbol, curr_date, look_back_days, label="Crypto News Analysis")
 
     @staticmethod
     @tool
@@ -565,7 +534,7 @@ class Toolkit:
         Returns:
             str: Social sentiment report with news and social posts
         """
-        return interface.get_social_sentiment_treeofalpha(symbol, curr_date, look_back_days)
+        return _timed_call(interface.get_social_sentiment_treeofalpha, symbol, curr_date, look_back_days, label="Tree of Alpha Sentiment")
 
     @staticmethod
     @tool
@@ -581,4 +550,4 @@ class Toolkit:
         Returns:
             str: Fundamental analysis including market metrics, supply data, and crypto-specific fundamentals
         """
-        return interface.get_crypto_fundamentals_analysis(symbol, curr_date)
+        return _timed_call(interface.get_crypto_fundamentals_analysis, symbol, curr_date, label="Crypto Fundamentals")
