@@ -152,13 +152,14 @@ INSTRUMENT_INFO: dict = {
 
 # Known crypto symbols — these take priority if matched before the TradFi list
 _CRYPTO_SYMBOLS = {
-    'BTC', 'ETH', 'ADA', 'SOL', 'DOT', 'AVAX', 'MATIC', 'LINK', 'UNI', 'AAVE',
-    'XRP', 'LTC', 'BCH', 'EOS', 'TRX', 'XLM', 'VET', 'ALGO', 'ATOM', 'LUNA',
-    'NEAR', 'FTM', 'CRO', 'SAND', 'MANA', 'AXS', 'GALA', 'ENJ', 'CHZ', 'BAT',
-    'ZEC', 'DASH', 'XMR', 'DOGE', 'SHIB', 'PEPE', 'FLOKI', 'BNB', 'USDT', 'USDC',
+    'BTC', 'ETH', 'ADA', 'SOL', 'DOT', 'AVAX', 'LINK', 'UNI', 'AAVE',
+    'XRP', 'LTC', 'BCH', 'EOS', 'TRX', 'XLM', 'ALGO', 'ATOM',
+    'NEAR', 'CRO', 'SAND', 'MANA', 'AXS', 'GALA', 'ENJ', 'CHZ', 'BAT',
+    'ZEC', 'DASH', 'XMR', 'DOGE', 'SHIB', 'PEPE', 'FLOKI', 'BNB',
     'TON', 'ICP', 'HBAR', 'THETA', 'FIL', 'ETC', 'MKR', 'APT', 'LDO', 'OP',
     'IMX', 'GRT', 'RUNE', 'FLOW', 'EGLD', 'XTZ', 'MINA', 'ROSE', 'KAVA',
-    'SUI', 'SEI', 'ARB', 'BLUR', 'WLD', 'STX', 'INJ', 'TIA', 'PYTH', 'JUP',
+    'SUI', 'SEI', 'ARB', 'WLD', 'STX', 'INJ', 'TIA', 'PYTH', 'JUP',
+    'AGI', 'CHR', 'BANANA', 'BABY', 'SONIC', 'MON', 'SAROS', 'ROOT',
 }
 
 # Known individual stock symbols — these fall through to stock routing
