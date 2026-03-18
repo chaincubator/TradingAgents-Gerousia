@@ -67,6 +67,13 @@ class GraphSetup:
             delete_nodes["market"] = create_msg_delete()
             tool_nodes["market"] = self.tool_nodes["market"]
 
+        if "market_4h" in selected_analysts:
+            analyst_nodes["market_4h"] = create_market_4h_analyst(
+                self.quick_thinking_llm, self.toolkit
+            )
+            delete_nodes["market_4h"] = create_msg_delete()
+            tool_nodes["market_4h"] = self.tool_nodes["market_4h"]
+
         if "social" in selected_analysts:
             analyst_nodes["social"] = create_social_media_analyst(
                 self.quick_thinking_llm, self.toolkit
@@ -108,14 +115,26 @@ class GraphSetup:
             self.deep_thinking_llm, self.risk_manager_memory
         )
 
+        # Human-readable analyst display names
+        _analyst_display = {
+            "market":     "Market",
+            "market_4h":  "Market 4H",
+            "social":     "Social",
+            "news":       "News",
+            "fundamentals": "Fundamentals",
+        }
+
+        def _display(t):
+            return _analyst_display.get(t, t.replace("_", " ").capitalize())
+
         # Create workflow
         workflow = StateGraph(AgentState)
 
         # Add analyst nodes to the graph
         for analyst_type, node in analyst_nodes.items():
-            workflow.add_node(f"{analyst_type.capitalize()} Analyst", node)
+            workflow.add_node(f"{_display(analyst_type)} Analyst", node)
             workflow.add_node(
-                f"Msg Clear {analyst_type.capitalize()}", delete_nodes[analyst_type]
+                f"Msg Clear {_display(analyst_type)}", delete_nodes[analyst_type]
             )
             workflow.add_node(f"tools_{analyst_type}", tool_nodes[analyst_type])
 
@@ -132,13 +151,13 @@ class GraphSetup:
         # Define edges
         # Start with the first analyst
         first_analyst = selected_analysts[0]
-        workflow.add_edge(START, f"{first_analyst.capitalize()} Analyst")
+        workflow.add_edge(START, f"{_display(first_analyst)} Analyst")
 
         # Connect analysts in sequence
         for i, analyst_type in enumerate(selected_analysts):
-            current_analyst = f"{analyst_type.capitalize()} Analyst"
+            current_analyst = f"{_display(analyst_type)} Analyst"
             current_tools = f"tools_{analyst_type}"
-            current_clear = f"Msg Clear {analyst_type.capitalize()}"
+            current_clear = f"Msg Clear {_display(analyst_type)}"
 
             # Add conditional edges for current analyst
             workflow.add_conditional_edges(
@@ -150,7 +169,7 @@ class GraphSetup:
 
             # Connect to next analyst or to Bull Researcher if this is the last analyst
             if i < len(selected_analysts) - 1:
-                next_analyst = f"{selected_analysts[i+1].capitalize()} Analyst"
+                next_analyst = f"{_display(selected_analysts[i+1])} Analyst"
                 workflow.add_edge(current_clear, next_analyst)
             else:
                 workflow.add_edge(current_clear, "Bull Researcher")

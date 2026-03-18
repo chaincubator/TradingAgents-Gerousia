@@ -13,6 +13,7 @@ def create_safe_debator(llm):
         current_neutral_response = risk_debate_state.get("current_neutral_response", "")
 
         market_research_report = state["market_report"]
+        market_4h_report = state.get("market_4h_report", "")
         sentiment_report = state["sentiment_report"]
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
@@ -25,7 +26,8 @@ def create_safe_debator(llm):
 
 Your task is to actively counter the arguments of the Risky and Neutral Analysts, highlighting where their views may overlook potential threats or fail to prioritize sustainability. Respond directly to their points, drawing from the following data sources to build a convincing case for a low-risk approach adjustment to the trader's decision:
 
-Market Research Report: {market_research_report}
+Market Research Report (5m): {market_research_report}
+Market Research Report (4h): {market_4h_report}
 Social Media Sentiment Report: {sentiment_report}
 Latest World Affairs Report: {news_report}
 Company Fundamentals Report: {fundamentals_report}

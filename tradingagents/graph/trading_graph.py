@@ -165,6 +165,15 @@ class TradingAgentsGraph:
                     self.toolkit.get_crypto_market_analysis,
                 ]
             ),
+            "market_4h": ToolNode(
+                [
+                    self.toolkit.get_crypto_4h_price_history,
+                    self.toolkit.get_crypto_4h_technical_analysis,
+                    # Stock fallback (daily data)
+                    self.toolkit.get_YFin_data_online,
+                    self.toolkit.get_stockstats_indicators_report_online,
+                ]
+            ),
             "social": ToolNode(
                 [
                     # Stock tools (online)

@@ -11,6 +11,7 @@ def create_bull_researcher(llm, memory):
 
         current_response = investment_debate_state.get("current_response", "")
         market_research_report = state["market_report"]
+        market_4h_report = state.get("market_4h_report", "")
         sentiment_report = state["sentiment_report"]
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
@@ -32,7 +33,8 @@ Key points to focus on:
 - Engagement: Present your argument in a conversational style, engaging directly with the bear analyst's points and debating effectively rather than just listing data.
 
 Resources available:
-Market research report: {market_research_report}
+Market research report (5m): {market_research_report}
+Market research report (4h): {market_4h_report}
 Social media sentiment report: {sentiment_report}
 Latest world affairs news: {news_report}
 Company fundamentals report: {fundamentals_report}

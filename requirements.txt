@@ -17,6 +17,7 @@ parsel
 requests
 python-binance
 scipy
+ta
 tqdm
 pytz
 redis

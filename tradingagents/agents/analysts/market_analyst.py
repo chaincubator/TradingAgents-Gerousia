@@ -156,3 +156,91 @@ Volume-Based Indicators:
         }
 
     return market_analyst_node
+
+
+def create_market_4h_analyst(llm, toolkit):
+    """4-hour bar market analyst for medium/long-term trend analysis."""
+
+    def market_4h_analyst_node(state):
+        current_date = state["trade_date"]
+        ticker = state["company_of_interest"]
+
+        is_crypto = _is_crypto_symbol(ticker)
+
+        if is_crypto:
+            tools = [
+                toolkit.get_crypto_4h_price_history,
+                toolkit.get_crypto_4h_technical_analysis,
+            ]
+            system_message = (
+                "You are a cryptocurrency 4-hour chart analyst specialising in "
+                "medium and long-term trend analysis. Your role is to interpret "
+                "2 years of 4-hour OHLCV bars and their technical indicators to "
+                "identify the dominant trend, key structural levels, and cyclical "
+                "patterns relevant for swing and position traders.\n\n"
+                "Focus on:\n"
+                "- Long-term trend direction (EMA50 vs EMA200, Golden/Death Cross)\n"
+                "- MACD crossovers and divergences on the 4h timeframe\n"
+                "- RSI(14) overbought/oversold across the 2-year range\n"
+                "- Bollinger Band squeezes and expansions\n"
+                "- ATR-based volatility regimes\n"
+                "- Stochastic momentum signals\n"
+                "- Multi-month support and resistance clusters\n"
+                "- Volume patterns and accumulation/distribution\n\n"
+                "Cross-reference short-term 5m analysis with this 4h view to identify "
+                "confluence or divergence between timeframes. "
+                "Append a concise Markdown table summarising key indicator values. "
+                "Be concise and direct. Keep your response under 4096 characters."
+            )
+        else:
+            # For stocks, 4h bars are not standard — fall back to daily data
+            if toolkit.config["online_tools"]:
+                tools = [
+                    toolkit.get_YFin_data_online,
+                    toolkit.get_stockstats_indicators_report_online,
+                ]
+            else:
+                tools = [
+                    toolkit.get_YFin_data,
+                    toolkit.get_stockstats_indicators_report,
+                ]
+            system_message = (
+                "You are a medium-term market analyst tasked with identifying trends "
+                "over the past 2 years using daily stock data. Analyse trend direction, "
+                "key moving averages, momentum indicators, and support/resistance. "
+                "Append a concise Markdown table. Be concise. Keep under 4096 characters."
+            )
+
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    "You are a helpful AI assistant, collaborating with other assistants."
+                    " Use the provided tools to progress towards answering the question."
+                    " If you are unable to fully answer, that's OK; another assistant with"
+                    " different tools will help where you left off."
+                    " You have access to the following tools: {tool_names}.\n{system_message}"
+                    " The current date is {current_date}. Analyse: {ticker}",
+                ),
+                MessagesPlaceholder(variable_name="messages"),
+            ]
+        )
+
+        prompt = prompt.partial(system_message=system_message)
+        prompt = prompt.partial(tool_names=", ".join([t.name for t in tools]))
+        prompt = prompt.partial(current_date=current_date)
+        prompt = prompt.partial(ticker=ticker)
+
+        chain = prompt | llm.bind_tools(tools)
+        result = chain.invoke(state["messages"])
+
+        report = ""
+        if len(result.tool_calls) == 0:
+            report = result.content
+
+        return {
+            "messages": [result],
+            "market_4h_report": report,
+        }
+
+    return market_4h_analyst_node

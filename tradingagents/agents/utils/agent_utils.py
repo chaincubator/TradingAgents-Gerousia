@@ -459,7 +459,7 @@ class Toolkit:
     def get_crypto_technical_analysis(
         symbol: Annotated[str, "Cryptocurrency symbol like BTC, ETH, ADA"],
         curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
-        look_back_days: Annotated[int, "How many days to look back"] = 30,
+        look_back_days: Annotated[int, "How many days to look back"] = 7,
     ) -> str:
         """
         Get technical analysis for a cryptocurrency including trends, support/resistance levels, and momentum indicators.
@@ -471,6 +471,44 @@ class Toolkit:
             str: Technical analysis including price trends, volume analysis, and key levels
         """
         return interface.get_crypto_technical_analysis(symbol, curr_date, look_back_days)
+
+    @staticmethod
+    @tool
+    def get_crypto_4h_price_history(
+        symbol: Annotated[str, "Cryptocurrency symbol like BTC, ETH, ADA"],
+        curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
+        look_back_days: Annotated[int, "How many days to look back"] = 730,
+    ) -> str:
+        """
+        Get 4-hour OHLCV price history for a cryptocurrency (default 2 years / 730 days).
+        Args:
+            symbol (str): Crypto symbol (e.g., 'BTC', 'ETH', 'ADA')
+            curr_date (str): Current date in yyyy-mm-dd format
+            look_back_days (int): Number of days to look back, default 730 (2 years)
+        Returns:
+            str: Monthly-aggregated OHLCV table derived from 4h bars
+        """
+        return interface.get_crypto_4h_price_history(symbol, curr_date, look_back_days)
+
+    @staticmethod
+    @tool
+    def get_crypto_4h_technical_analysis(
+        symbol: Annotated[str, "Cryptocurrency symbol like BTC, ETH, ADA"],
+        curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
+        look_back_days: Annotated[int, "How many days to look back"] = 730,
+    ) -> str:
+        """
+        Get 4-hour technical analysis: RSI(14), EMA50/200, MACD(12/26/9),
+        Bollinger Bands(20,2σ), ATR(14), Stochastic(14,3), Volume SMA(20).
+        Uses 4h bars for medium/long-term trend analysis.
+        Args:
+            symbol (str): Crypto symbol (e.g., 'BTC', 'ETH', 'ADA')
+            curr_date (str): Current date in yyyy-mm-dd format
+            look_back_days (int): Number of days, default 730 (2 years)
+        Returns:
+            str: Technical analysis report from 4h Binance candles
+        """
+        return interface.get_crypto_4h_technical_analysis(symbol, curr_date, look_back_days)
 
     @staticmethod
     @tool

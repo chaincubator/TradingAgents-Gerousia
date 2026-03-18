@@ -24,6 +24,7 @@ chromadb
 requests
 python-binance
 scipy
+ta
 feedparser
 praw
 parsel

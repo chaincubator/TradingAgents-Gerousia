@@ -12,6 +12,8 @@ from .treeofalpha_utils import get_treeofalpha_sentiment
 from .binance_utils import (
     get_binance_price_history,
     get_binance_technical_analysis,
+    get_binance_4h_price_history,
+    get_binance_4h_technical_analysis,
 )
 from dateutil.relativedelta import relativedelta
 from concurrent.futures import ThreadPoolExecutor
@@ -892,6 +894,31 @@ def get_crypto_news_analysis(
         String containing news and trends
     """
     return get_crypto_news(symbol, curr_date, look_back_days)
+
+
+def get_crypto_4h_price_history(
+    symbol: Annotated[str, "Cryptocurrency symbol like BTC, ETH, ADA"],
+    curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
+    look_back_days: Annotated[int, "How many days to look back"] = 730,
+) -> str:
+    """Get 4-hour OHLCV price history for a cryptocurrency (2-year default)."""
+    config = get_config()
+    cache_dir = os.path.join(config.get("data_cache_dir", "./data"), "binance_cache")
+    return get_binance_4h_price_history(symbol, curr_date, look_back_days, cache_dir)
+
+
+def get_crypto_4h_technical_analysis(
+    symbol: Annotated[str, "Cryptocurrency symbol like BTC, ETH, ADA"],
+    curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
+    look_back_days: Annotated[int, "How many days to look back"] = 730,
+) -> str:
+    """
+    Compute 4h technical indicators: RSI(14), EMA50/200, MACD(12/26/9),
+    Bollinger Bands(20,2σ), ATR(14), Stochastic(14,3), Volume SMA(20).
+    """
+    config = get_config()
+    cache_dir = os.path.join(config.get("data_cache_dir", "./data"), "binance_cache")
+    return get_binance_4h_technical_analysis(symbol, curr_date, look_back_days, cache_dir)
 
 
 def get_social_sentiment_treeofalpha(
