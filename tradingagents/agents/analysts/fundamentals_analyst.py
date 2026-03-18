@@ -1,6 +1,7 @@
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 import time
 import json
+from tradingagents.dataflows.tradfi_utils import classify_symbol, get_instrument_info
 
 
 def _is_crypto_symbol(symbol: str) -> bool:
@@ -55,13 +56,26 @@ def create_fundamentals_analyst(llm, toolkit):
         ticker = state["company_of_interest"]
         company_name = state["company_of_interest"]
 
-        # Check if we're dealing with crypto or stocks
-        is_crypto = _is_crypto_symbol(ticker)
-        
-        if is_crypto:
-            # Use crypto-specific tools
+        instrument_type = classify_symbol(ticker)
+
+        if instrument_type == "tradfi":
+            info  = get_instrument_info(ticker)
+            tools = [toolkit.get_fundamentals_openai] if toolkit.config["online_tools"] else [toolkit.get_google_news]
+            system_message = (
+                f"You are a TradFi fundamentals analyst specialising in {info['type'].replace('_',' ')} instruments. "
+                f"Analysing {info['name']} ({ticker.upper()}), which trades as a perpetual future on "
+                f"{info.get('perps','Binance / Hyperliquid')}. "
+                "Research and report on the fundamental drivers most relevant to this asset: "
+                "For commodities — supply/demand balance, inventory levels, production data, seasonal factors, "
+                "currency effects, geopolitical risks, and central bank holdings. "
+                "For equity indices and ETFs — macro environment, earnings cycle, valuations (P/E, P/B), "
+                "sector weightings, flows, and regional economic indicators. "
+                "For fixed income — yield levels, duration risk, credit spreads, central bank policy. "
+                "Focus on what drives the perpetual contract price. Append a concise Markdown table. "
+                "Be concise. Keep under 4096 characters.",
+            )
+        elif instrument_type == "crypto":
             tools = [toolkit.get_crypto_fundamentals_analysis, toolkit.get_crypto_market_analysis]
-            
             system_message = (
                 "You are a cryptocurrency fundamental analyst tasked with analyzing fundamental information about a cryptocurrency. Please write a comprehensive report of the cryptocurrency's fundamental information such as market capitalization, supply mechanics, token economics, network metrics, adoption indicators, and market positioning to gain a full view of the cryptocurrency's fundamental value proposition to inform traders. "
                 "Focus on crypto-specific metrics like: market cap rank, circulating vs total supply, trading volume patterns, network activity, developer ecosystem, regulatory environment, community strength, and technology fundamentals. "
@@ -69,7 +83,7 @@ def create_fundamentals_analyst(llm, toolkit):
                 + " Make sure to append a concise Markdown table at the end. Be concise and direct. Keep your response under 4096 characters.",
             )
         else:
-            # Use stock-specific tools (original functionality)
+            # Stock
             if toolkit.config["online_tools"]:
                 tools = [toolkit.get_fundamentals_openai]
             else:
@@ -80,7 +94,6 @@ def create_fundamentals_analyst(llm, toolkit):
                     toolkit.get_simfin_cashflow,
                     toolkit.get_simfin_income_stmt,
                 ]
-
             system_message = (
                 "You are a researcher tasked with analyzing fundamental information over the past week about a company. Please write a comprehensive report of the company's fundamental information such as financial documents, company profile, basic company financials, company financial history, insider sentiment and insider transactions to gain a full view of the company's fundamental information to inform traders. Make sure to include as much detail as possible. Do not simply state the trends are mixed, provide detailed and finegrained analysis and insights that may help traders make decisions."
                 + " Make sure to append a concise Markdown table at the end. Be concise and direct. Keep your response under 4096 characters.",

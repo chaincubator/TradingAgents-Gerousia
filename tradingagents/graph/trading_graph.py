@@ -175,6 +175,9 @@ class TradingAgentsGraph:
                     # Stock tools (offline)
                     self.toolkit.get_YFin_data,
                     self.toolkit.get_stockstats_indicators_report,
+                    # TradFi tools (commodities, indices, ETFs via yfinance)
+                    self.toolkit.get_tradfi_price_history,
+                    self.toolkit.get_tradfi_technical_analysis,
                     # Crypto tools
                     self.toolkit.get_crypto_price_history,
                     self.toolkit.get_crypto_technical_analysis,
@@ -185,7 +188,9 @@ class TradingAgentsGraph:
                 [
                     self.toolkit.get_crypto_4h_price_history,
                     self.toolkit.get_crypto_4h_technical_analysis,
-                    # Stock fallback (daily data)
+                    # TradFi / Stock fallback (daily data)
+                    self.toolkit.get_tradfi_price_history,
+                    self.toolkit.get_tradfi_technical_analysis,
                     self.toolkit.get_YFin_data_online,
                     self.toolkit.get_stockstats_indicators_report_online,
                 ]

@@ -1,6 +1,7 @@
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 import time
 import json
+from tradingagents.dataflows.tradfi_utils import classify_symbol, get_instrument_info
 
 
 def _is_crypto_symbol(symbol: str) -> bool:
@@ -54,13 +55,25 @@ def create_news_analyst(llm, toolkit):
         current_date = state["trade_date"]
         ticker = state["company_of_interest"]
 
-        # Check if we're dealing with crypto or stocks
-        is_crypto = _is_crypto_symbol(ticker)
-        
-        if is_crypto:
-            # Use crypto-specific tools
+        instrument_type = classify_symbol(ticker)
+
+        if instrument_type == "tradfi":
+            info  = get_instrument_info(ticker)
+            tools = [toolkit.get_google_news]
+            if toolkit.config["online_tools"]:
+                tools = [toolkit.get_global_news_openai, toolkit.get_google_news]
+            system_message = (
+                f"You are a macro and TradFi news researcher analysing {info['name']} ({ticker.upper()}), "
+                f"a {info['type'].replace('_',' ')} instrument that trades as a perpetual future on "
+                f"{info.get('perps','Binance / Hyperliquid')}. "
+                "Search for news and macro developments over the past week that are most relevant to this "
+                "asset: central bank decisions, geopolitical events, supply/demand drivers, sector news, "
+                "currency moves, and any regulatory developments. "
+                "Do not state trends are mixed without evidence. Provide specific, actionable insights. "
+                "Append a concise Markdown table. Be concise. Keep under 4096 characters."
+            )
+        elif instrument_type == "crypto":
             tools = [toolkit.get_crypto_news_analysis, toolkit.get_google_news]
-            
             system_message = (
                 "You are a cryptocurrency news researcher tasked with analyzing recent news and trends over the past week that affect cryptocurrency markets. Please write a comprehensive report of the current state of the crypto world and broader macroeconomic factors that are relevant for cryptocurrency trading. "
                 "Focus on crypto-specific news including: regulatory developments, institutional adoption, technology updates, market sentiment, DeFi trends, NFT markets, blockchain developments, and major crypto exchange news. "
@@ -69,7 +82,7 @@ def create_news_analyst(llm, toolkit):
                 + " Make sure to append a concise Markdown table at the end. Be concise and direct. Keep your response under 4096 characters."
             )
         else:
-            # Use stock-specific tools (original functionality)
+            # Stock
             if toolkit.config["online_tools"]:
                 tools = [toolkit.get_global_news_openai, toolkit.get_google_news]
             else:
@@ -78,7 +91,6 @@ def create_news_analyst(llm, toolkit):
                     toolkit.get_reddit_news,
                     toolkit.get_google_news,
                 ]
-
             system_message = (
                 "You are a news researcher tasked with analyzing recent news and trends over the past week. Please write a comprehensive report of the current state of the world that is relevant for trading and macroeconomics. Look at news from EODHD, and finnhub to be comprehensive. Do not simply state the trends are mixed, provide detailed and finegrained analysis and insights that may help traders make decisions."
                 + " Make sure to append a concise Markdown table at the end. Be concise and direct. Keep your response under 4096 characters."

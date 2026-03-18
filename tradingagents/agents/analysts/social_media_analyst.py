@@ -3,7 +3,7 @@ import time
 import json
 
 # Reuse the crypto symbol detector from the news analyst
-from tradingagents.agents.analysts.news_analyst import _is_crypto_symbol
+from tradingagents.dataflows.tradfi_utils import classify_symbol, get_instrument_info
 
 
 def create_social_media_analyst(llm, toolkit):
@@ -12,9 +12,24 @@ def create_social_media_analyst(llm, toolkit):
         ticker = state["company_of_interest"]
         company_name = state["company_of_interest"]
 
-        is_crypto = _is_crypto_symbol(ticker)
+        instrument_type = classify_symbol(ticker)
 
-        if is_crypto:
+        if instrument_type == "tradfi":
+            info  = get_instrument_info(ticker)
+            tools = [toolkit.get_treeofalpha_sentiment, toolkit.get_google_news]
+            if toolkit.config["online_tools"]:
+                tools = [toolkit.get_global_news_openai, toolkit.get_google_news]
+            system_message = (
+                f"You are a TradFi market sentiment analyst covering {info['name']} ({ticker.upper()}), "
+                f"a {info['type'].replace('_',' ')} that trades as a perpetual future on "
+                f"{info.get('perps','Binance / Hyperliquid')}. "
+                "Analyse recent social media posts, news sentiment, and market commentary relevant to "
+                "this instrument over the past week. Cover: trader positioning, retail/institutional "
+                "sentiment, key narratives driving price, contrarian signals, and any social catalysts. "
+                "Do not state trends are mixed without evidence. "
+                "Append a concise Markdown table. Be concise. Keep under 4096 characters."
+            )
+        elif instrument_type == "crypto":
             # Crypto: use Tree of Alpha for real social sentiment data
             tools = [toolkit.get_treeofalpha_sentiment]
             system_message = (

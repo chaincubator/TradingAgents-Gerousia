@@ -9,6 +9,12 @@ from .coingecko_utils import (
     get_crypto_news,
 )
 from .treeofalpha_utils import get_treeofalpha_sentiment
+from .tradfi_utils import (
+    get_tradfi_price_history as _tradfi_price_history,
+    get_tradfi_technical_analysis as _tradfi_technical_analysis,
+    classify_symbol,
+    get_instrument_info,
+)
 from .binance_utils import (
     get_binance_price_history,
     get_binance_technical_analysis,
@@ -919,6 +925,27 @@ def get_crypto_4h_technical_analysis(
     config = get_config()
     cache_dir = os.path.join(config.get("data_cache_dir", "./data"), "binance_cache")
     return get_binance_4h_technical_analysis(symbol, curr_date, look_back_days, cache_dir)
+
+
+def get_tradfi_price_history(
+    symbol: Annotated[str, "TradFi perp symbol e.g. GOLD, EWY, SPX, OIL"],
+    start_date: Annotated[str, "Start date in YYYY-MM-DD format"],
+    end_date: Annotated[str, "End date in YYYY-MM-DD format"],
+) -> str:
+    """Fetch daily OHLCV price history for a TradFi instrument via Yahoo Finance."""
+    return _tradfi_price_history(symbol, start_date, end_date)
+
+
+def get_tradfi_technical_analysis(
+    symbol: Annotated[str, "TradFi perp symbol e.g. GOLD, EWY, SPX, OIL"],
+    curr_date: Annotated[str, "Current date in YYYY-MM-DD format"],
+    look_back_days: Annotated[int, "How many calendar days to look back"] = 365,
+) -> str:
+    """
+    Compute technical indicators (RSI, EMA, MACD, BB, ATR, Stochastic)
+    from Yahoo Finance daily data for a TradFi instrument.
+    """
+    return _tradfi_technical_analysis(symbol, curr_date, look_back_days)
 
 
 def get_social_sentiment_treeofalpha(

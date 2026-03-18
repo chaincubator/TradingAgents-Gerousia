@@ -1,52 +1,7 @@
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 import time
 import json
-
-
-def _is_crypto_symbol(symbol: str) -> bool:
-    """
-    Detect if a symbol is likely a cryptocurrency
-    Uses a whitelist approach for known crypto symbols and excludes known stock patterns
-    """
-    # Known crypto symbols (most common ones)
-    crypto_symbols = {
-        'BTC', 'ETH', 'ADA', 'SOL', 'DOT', 'AVAX', 'MATIC', 'LINK', 'UNI', 'AAVE',
-        'XRP', 'LTC', 'BCH', 'EOS', 'TRX', 'XLM', 'VET', 'ALGO', 'ATOM', 'LUNA',
-        'NEAR', 'FTM', 'CRO', 'SAND', 'MANA', 'AXS', 'GALA', 'ENJ', 'CHZ', 'BAT',
-        'ZEC', 'DASH', 'XMR', 'DOGE', 'SHIB', 'PEPE', 'FLOKI', 'BNB', 'USDT', 'USDC',
-        'TON', 'ICP', 'HBAR', 'THETA', 'FIL', 'ETC', 'MKR', 'APT', 'LDO', 'OP',
-        'IMX', 'GRT', 'RUNE', 'FLOW', 'EGLD', 'XTZ', 'MINA', 'ROSE', 'KAVA'
-    }
-    
-    # Known stock symbols (to avoid false positives)
-    stock_symbols = {
-        'AAPL', 'GOOGL', 'MSFT', 'AMZN', 'TSLA', 'NVDA', 'META', 'NFLX', 'DIS', 'AMD',
-        'INTC', 'CRM', 'ORCL', 'ADBE', 'CSCO', 'PEP', 'KO', 'WMT', 'JNJ', 'PFE',
-        'V', 'MA', 'HD', 'UNH', 'BAC', 'XOM', 'CVX', 'LLY', 'ABBV', 'COST',
-        'AVGO', 'TMO', 'ACN', 'DHR', 'TXN', 'LOW', 'QCOM', 'HON', 'UPS', 'MDT'
-    }
-    
-    symbol_upper = symbol.upper()
-    
-    # If it's a known stock symbol, it's definitely not crypto
-    if symbol_upper in stock_symbols:
-        return False
-    
-    # If it's a known crypto symbol, it's definitely crypto
-    if symbol_upper in crypto_symbols:
-        return True
-    
-    # For unknown symbols, be conservative and assume it's a stock
-    # unless it has typical crypto characteristics
-    if len(symbol) >= 5:  # Most stocks are 4+ characters
-        return False
-    
-    # Short symbols (2-4 chars) could be crypto if they don't look like stocks
-    if len(symbol) <= 4 and symbol.isalnum() and not any(c in symbol for c in ['.', '-', '_']):
-        # Additional heuristic: crypto symbols often have certain patterns
-        return True
-    
-    return False
+from tradingagents.dataflows.tradfi_utils import classify_symbol, get_instrument_info
 
 
 def create_market_analyst(llm, toolkit):
@@ -56,13 +11,27 @@ def create_market_analyst(llm, toolkit):
         ticker = state["company_of_interest"]
         company_name = state["company_of_interest"]
 
-        # Check if we're dealing with crypto or stocks
-        is_crypto = _is_crypto_symbol(ticker)
-        
-        if is_crypto:
+        instrument_type = classify_symbol(ticker)
+
+        if instrument_type == "tradfi":
+            # TradFi instruments: commodity, index, ETF, FX — use underlying yfinance data
+            info = get_instrument_info(ticker)
+            tools = [toolkit.get_tradfi_price_history, toolkit.get_tradfi_technical_analysis]
+            system_message = (
+                f"You are a TradFi market analyst specialising in {info['type'].replace('_',' ')} instruments. "
+                f"You are analysing {info['name']} ({ticker.upper()}), which trades as a perpetual future on "
+                f"{info.get('perps', 'Binance / Hyperliquid')}. "
+                "Use the underlying Yahoo Finance price series for analysis — this gives you accurate spot/futures "
+                "prices free from funding-rate and basis distortions. "
+                "Compute and interpret: trend direction (EMA 20/50/200), momentum (RSI, MACD), volatility "
+                "(Bollinger Bands, ATR), and key support/resistance levels. "
+                "Consider macro drivers relevant to this asset class (e.g. USD strength, rates, commodity cycles, "
+                "geopolitics for country ETFs). Append a concise Markdown table. "
+                "Be concise and direct. Keep your response under 4096 characters."
+            )
+        elif instrument_type == "crypto":
             # Use crypto-specific tools
             tools = [toolkit.get_crypto_price_history, toolkit.get_crypto_technical_analysis]
-            
             system_message = (
                 """You are a cryptocurrency technical analyst tasked with analyzing crypto markets. Your role is to provide comprehensive technical analysis for cryptocurrency trading. Focus on crypto-specific patterns and indicators that are most relevant for digital assets.
 
@@ -78,7 +47,7 @@ Please write a very detailed and nuanced report of the trends you observe in the
                 + " Make sure to append a concise Markdown table at the end. Be concise and direct. Keep your response under 4096 characters."
             )
         else:
-            # Use stock-specific tools (original functionality)
+            # Stock — use existing yfinance / stockstats tools
             if toolkit.config["online_tools"]:
                 tools = [
                     toolkit.get_YFin_data_online,
@@ -165,9 +134,23 @@ def create_market_4h_analyst(llm, toolkit):
         current_date = state["trade_date"]
         ticker = state["company_of_interest"]
 
-        is_crypto = _is_crypto_symbol(ticker)
+        instrument_type = classify_symbol(ticker)
 
-        if is_crypto:
+        if instrument_type == "tradfi":
+            info  = get_instrument_info(ticker)
+            tools = [toolkit.get_tradfi_price_history, toolkit.get_tradfi_technical_analysis]
+            system_message = (
+                f"You are a TradFi medium/long-term analyst specialising in "
+                f"{info['type'].replace('_',' ')} instruments. "
+                f"Analysing {info['name']} ({ticker.upper()}) — perp markets: "
+                f"{info.get('perps','Binance / Hyperliquid')}. "
+                "Use the underlying Yahoo Finance daily price series (1 year+ of data) to identify "
+                "dominant trends, Golden/Death crosses, MACD signals, RSI regimes, "
+                "Bollinger Band conditions, and key multi-month support/resistance. "
+                "Also highlight macro drivers specific to this asset type. "
+                "Append a concise Markdown table. Be concise. Keep under 4096 characters."
+            )
+        elif instrument_type == "crypto":
             tools = [
                 toolkit.get_crypto_4h_price_history,
                 toolkit.get_crypto_4h_technical_analysis,
@@ -193,7 +176,7 @@ def create_market_4h_analyst(llm, toolkit):
                 "Be concise and direct. Keep your response under 4096 characters."
             )
         else:
-            # For stocks, 4h bars are not standard — fall back to daily data
+            # Stock — fall back to daily yfinance data
             if toolkit.config["online_tools"]:
                 tools = [
                     toolkit.get_YFin_data_online,

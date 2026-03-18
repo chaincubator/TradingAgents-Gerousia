@@ -512,6 +512,38 @@ class Toolkit:
 
     @staticmethod
     @tool
+    def get_tradfi_price_history(
+        symbol: Annotated[str, "TradFi perp symbol e.g. GOLD, EWY, SPX, OIL, TLT"],
+        start_date: Annotated[str, "Start date in YYYY-MM-DD format"],
+        end_date: Annotated[str, "End date in YYYY-MM-DD format"],
+    ) -> str:
+        """
+        Get daily OHLCV price history for a TradFi instrument (commodities, indices,
+        country ETFs, sector ETFs, fixed income, FX) via Yahoo Finance underlying data.
+        These instruments trade as perpetual futures on Binance and/or Hyperliquid.
+        Args:
+            symbol: perp ticker (e.g. 'GOLD', 'EWY', 'SPX', 'OIL', 'TLT')
+        """
+        return interface.get_tradfi_price_history(symbol, start_date, end_date)
+
+    @staticmethod
+    @tool
+    def get_tradfi_technical_analysis(
+        symbol: Annotated[str, "TradFi perp symbol e.g. GOLD, EWY, SPX, OIL, TLT"],
+        curr_date: Annotated[str, "Current date in YYYY-MM-DD format"],
+        look_back_days: Annotated[int, "Calendar days of history to analyse"] = 365,
+    ) -> str:
+        """
+        Compute RSI(14), EMA(20/50/200), MACD(12/26/9), Bollinger Bands,
+        ATR(14), and Stochastic(14,3) from Yahoo Finance daily data for a
+        TradFi instrument (commodity, index, ETF, or FX pair).
+        Args:
+            symbol: perp ticker (e.g. 'GOLD', 'EWY', 'SPX', 'OIL')
+        """
+        return interface.get_tradfi_technical_analysis(symbol, curr_date, look_back_days)
+
+    @staticmethod
+    @tool
     def get_crypto_news_analysis(
         symbol: Annotated[str, "Cryptocurrency symbol like BTC, ETH, ADA"],
         curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
