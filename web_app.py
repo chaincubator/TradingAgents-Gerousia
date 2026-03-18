@@ -13,6 +13,100 @@ import secrets
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 
+# Ordered section headings used when building combined Markdown reports
+_SECTION_HEADINGS = {
+    "market_report":          "## Market Analysis (5m)",
+    "market_4h_report":       "## Market Analysis (4h)",
+    "sentiment_report":       "## Social Sentiment",
+    "news_report":            "## News Analysis",
+    "fundamentals_report":    "## Fundamentals Analysis",
+    "investment_plan":        "## Research Team Decision",
+    "trader_investment_plan": "## Trading Plan",
+    "final_trade_decision":   "## Final Trade Decision",
+}
+
+
+def _web_results_dir(session_id: str) -> Path:
+    """Base results directory for a web session."""
+    base = Path(os.getenv("TRADINGAGENTS_RESULTS_DIR", DEFAULT_CONFIG["results_dir"]))
+    return base / "web" / session_id
+
+
+def _save_web_ticker_run(
+    session_id: str,
+    ticker: str,
+    analysis_date: str,
+    sections: dict,
+    messages: list,
+) -> Path:
+    """
+    Persist all report sections and activity log for one ticker/session to disk.
+
+    Directory layout:
+      results/web/{session_id}/{ticker}/{date}/reports/{section}.md
+      results/web/{session_id}/{ticker}/{date}/full_report.md
+      results/web/{session_id}/{ticker}/{date}/message.log
+    """
+    ticker_dir = _web_results_dir(session_id) / ticker / analysis_date
+    report_dir = ticker_dir / "reports"
+    report_dir.mkdir(parents=True, exist_ok=True)
+
+    # Individual section files
+    for section, content in sections.items():
+        if content:
+            (report_dir / f"{section}.md").write_text(content, encoding="utf-8")
+
+    # Combined full_report.md
+    parts = [f"# {ticker} — Full Analysis Report\n**Date:** {analysis_date}\n\n---\n"]
+    for key, heading in _SECTION_HEADINGS.items():
+        content = sections.get(key, "")
+        if content:
+            parts.append(f"{heading}\n\n{content}\n\n---\n")
+    (ticker_dir / "full_report.md").write_text("\n".join(parts), encoding="utf-8")
+
+    # Activity message log
+    if messages:
+        with open(ticker_dir / "message.log", "w", encoding="utf-8") as f:
+            for msg in messages:
+                ts      = msg.get("timestamp", "")
+                mt      = msg.get("type", "")
+                content = msg.get("content", "").replace("\n", " ")
+                f.write(f"{ts} [{mt}] {content}\n")
+
+    return ticker_dir
+
+
+def _save_web_portfolio(
+    session_id: str,
+    analysis_date: str,
+    portfolio_report: str,
+    tickers: list,
+) -> Path:
+    """
+    Persist the MVO portfolio report and a combined multi-ticker report.
+
+    Directory layout:
+      results/web/{session_id}/_portfolio/{date}/portfolio_mvo.md
+      results/web/{session_id}/_portfolio/{date}/full_portfolio_report.md
+    """
+    portfolio_dir = _web_results_dir(session_id) / "_portfolio" / analysis_date
+    portfolio_dir.mkdir(parents=True, exist_ok=True)
+
+    (portfolio_dir / "portfolio_mvo.md").write_text(portfolio_report, encoding="utf-8")
+
+    # Build combined report: MVO first, then each ticker's full_report.md
+    combined = [portfolio_report, "\n\n---\n\n# Individual Token Reports\n"]
+    for ticker in tickers:
+        path = _web_results_dir(session_id) / ticker / analysis_date / "full_report.md"
+        if path.exists():
+            combined.append(path.read_text(encoding="utf-8"))
+    (portfolio_dir / "full_portfolio_report.md").write_text(
+        "\n\n".join(combined), encoding="utf-8"
+    )
+
+    return portfolio_dir
+
+
 # Security utility for safe logging
 def safe_log_config(config: Dict) -> Dict:
     """Create a safe version of config for logging without sensitive information"""
@@ -349,6 +443,16 @@ def run_analysis_background(session_id: str, config: Dict):
                 analysis_sessions[session_id]['per_ticker_reports'] = {}
             analysis_sessions[session_id]['per_ticker_reports'][ticker] = ticker_sections
 
+            # Save reports + message log to disk
+            try:
+                saved_dir = _save_web_ticker_run(
+                    session_id, ticker, config['analysis_date'],
+                    ticker_sections, buffer.messages,
+                )
+                buffer.add_message("System", f"[{ticker}] Reports saved → {saved_dir}")
+            except Exception as save_err:
+                print(f"[WARNING] Could not save web reports for {ticker}: {save_err}")
+
             # Emit permanent per-ticker snapshot to the frontend
             socketio.emit('ticker_complete', {
                 'ticker': ticker,
@@ -364,6 +468,16 @@ def run_analysis_background(session_id: str, config: Dict):
             analysis_sessions[session_id]['portfolio_report'] = portfolio_report
             socketio.emit('portfolio_update', {'report': portfolio_report}, room=session_id)
             buffer.add_message("Portfolio", portfolio_report)
+
+            # Save portfolio + combined report to disk
+            try:
+                port_dir = _save_web_portfolio(
+                    session_id, config['analysis_date'], portfolio_report, tickers
+                )
+                buffer.add_message("System", f"Portfolio report saved → {port_dir}")
+            except Exception as save_err:
+                print(f"[WARNING] Could not save portfolio report: {save_err}")
+
             buffer.update_progress(100, "Portfolio optimisation complete!")
         else:
             buffer.update_progress(100, "Analysis completed successfully!")
