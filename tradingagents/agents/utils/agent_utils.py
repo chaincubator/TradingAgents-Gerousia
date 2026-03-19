@@ -519,6 +519,22 @@ class Toolkit:
 
     @staticmethod
     @tool
+    def get_fred_macro_data(
+        curr_date: Annotated[str, "Current date in YYYY-MM-DD format"],
+    ) -> str:
+        """
+        Fetch the latest FRED macro indicators across Growth, Labor, and Liquidity
+        from the Federal Reserve Bank of St. Louis database.
+        Requires FRED_API environment variable.
+        Returns a Markdown report with all three dimensions and macro regime summary.
+        """
+        return _timed_call(
+            interface.get_fred_macro_data, curr_date,
+            label="FRED Macro Data", timeout=30
+        )
+
+    @staticmethod
+    @tool
     def get_polymarket_data(
         symbol: Annotated[str, "Asset ticker e.g. BTC, ETH, GOLD, SPX"],
         curr_date: Annotated[str, "Current date in YYYY-MM-DD format"],

@@ -88,6 +88,13 @@ class GraphSetup:
             delete_nodes["news"] = create_msg_delete()
             tool_nodes["news"] = self.tool_nodes["news"]
 
+        if "fred" in selected_analysts:
+            analyst_nodes["fred"] = create_fred_analyst(
+                self.quick_thinking_llm, self.toolkit
+            )
+            delete_nodes["fred"] = create_msg_delete()
+            tool_nodes["fred"] = self.tool_nodes["fred"]
+
         if "polymarket" in selected_analysts:
             analyst_nodes["polymarket"] = create_polymarket_analyst(
                 self.quick_thinking_llm, self.toolkit
@@ -129,6 +136,7 @@ class GraphSetup:
         _analyst_display = {
             "market":       "Market",
             "market_4h":    "Market 4H",
+            "fred":         "FRED Macro",
             "polymarket":   "Polymarket",
             "social":       "Social",
             "news":         "News",

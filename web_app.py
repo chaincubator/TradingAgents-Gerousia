@@ -15,6 +15,7 @@ from tradingagents.default_config import DEFAULT_CONFIG
 
 # Ordered section headings used when building combined Markdown reports
 _SECTION_HEADINGS = {
+    "fred_report":            "## FRED Macro Snapshot (Growth/Labor/Liquidity)",
     "polymarket_report":      "## Polymarket Prediction Market Signals",
     "market_report":          "## Market Analysis (5m)",
     "market_4h_report":       "## Market Analysis (4h)",
@@ -170,6 +171,7 @@ class WebMessageBuffer:
         self.agent_status = {
             "Market Analyst (5m)": "pending",
             "Market Analyst (4h)": "pending",
+            "FRED Macro Analyst": "pending",
             "Polymarket Analyst": "pending",
             "Social Analyst": "pending",
             "News Analyst": "pending",
@@ -191,6 +193,7 @@ class WebMessageBuffer:
             "sentiment_report": None,
             "news_report": None,
             "market_4h_report": None,
+            "fred_report": None,
             "polymarket_report": None,
             "fundamentals_report": None,
             "investment_plan": None,
@@ -387,6 +390,11 @@ def run_analysis_background(session_id: str, config: Dict):
                         buffer.update_report_section("market_4h_report", chunk["market_4h_report"])
                         buffer.update_agent_status("Market Analyst (4h)", "completed")
                         buffer.update_progress(progress, f"[{ticker}] Market 4h analysis completed")
+
+                    if "fred_report" in chunk and chunk["fred_report"]:
+                        buffer.update_report_section("fred_report", chunk["fred_report"])
+                        buffer.update_agent_status("FRED Macro Analyst", "completed")
+                        buffer.update_progress(progress, f"[{ticker}] FRED macro analysis completed")
 
                     if "polymarket_report" in chunk and chunk["polymarket_report"]:
                         buffer.update_report_section("polymarket_report", chunk["polymarket_report"])

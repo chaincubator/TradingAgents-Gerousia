@@ -11,6 +11,14 @@ class ConditionalLogic:
         self.max_debate_rounds = max_debate_rounds
         self.max_risk_discuss_rounds = max_risk_discuss_rounds
 
+    def should_continue_fred(self, state: AgentState):
+        """Determine if FRED macro analysis should continue."""
+        messages = state["messages"]
+        last_message = messages[-1]
+        if last_message.tool_calls:
+            return "tools_fred"
+        return "Msg Clear Fred"
+
     def should_continue_polymarket(self, state: AgentState):
         """Determine if Polymarket analysis should continue."""
         messages = state["messages"]

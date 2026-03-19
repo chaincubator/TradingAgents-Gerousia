@@ -43,6 +43,7 @@ class MessageBuffer:
         self.final_report = None  # Store the complete final report
         self.agent_status = {
             # Analyst Team
+            "FRED Macro Analyst": "pending",
             "Polymarket Analyst": "pending",
             "Market Analyst (5m)": "pending",
             "Market Analyst (4h)": "pending",
@@ -67,6 +68,7 @@ class MessageBuffer:
         }
         self.current_agent = None
         self.report_sections = {
+            "fred_report": None,
             "polymarket_report": None,
             "market_report": None,
             "market_4h_report": None,
@@ -743,6 +745,7 @@ def extract_content_string(content):
         return str(content)
 
 _SECTION_HEADINGS = {
+    "fred_report":          "## FRED Macro Snapshot (Growth/Labor/Liquidity)",
     "polymarket_report":    "## Polymarket Prediction Market Signals",
     "market_report":        "## Market Analysis (5m)",
     "market_4h_report":     "## Market Analysis (4h)",
@@ -842,6 +845,9 @@ def _run_ticker_analysis(ticker: str, analysis_date: str, selections, graph, lay
                         message_buffer.add_tool_call(tool_call["name"], tool_call["args"])
                     else:
                         message_buffer.add_tool_call(tool_call.name, tool_call.args)
+            if "fred_report" in chunk and chunk["fred_report"]:
+                message_buffer.update_report_section("fred_report", chunk["fred_report"])
+                message_buffer.update_agent_status("FRED Macro Analyst", "completed")
             if "polymarket_report" in chunk and chunk["polymarket_report"]:
                 message_buffer.update_report_section("polymarket_report", chunk["polymarket_report"])
                 message_buffer.update_agent_status("Polymarket Analyst", "completed")

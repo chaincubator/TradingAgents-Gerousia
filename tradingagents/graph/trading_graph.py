@@ -237,6 +237,11 @@ class TradingAgentsGraph:
                     self.toolkit.get_crypto_market_analysis,
                 ]
             ),
+            "fred": ToolNode(
+                [
+                    self.toolkit.get_fred_macro_data,
+                ]
+            ),
             "polymarket": ToolNode(
                 [
                     self.toolkit.get_polymarket_data,

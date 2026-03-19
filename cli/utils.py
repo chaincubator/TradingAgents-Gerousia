@@ -6,6 +6,7 @@ from cli.models import AnalystType
 ANALYST_ORDER = [
     ("Market Analyst (5m)", AnalystType.MARKET),
     ("Market Analyst (4h, 2-year)", AnalystType.MARKET_4H),
+    ("FRED Quantitative Macro Analyst (Growth/Labor/Liquidity)", AnalystType.FRED),
     ("Polymarket Prediction Market Analyst", AnalystType.POLYMARKET),
     ("Social Media Analyst", AnalystType.SOCIAL),
     ("News Analyst", AnalystType.NEWS),

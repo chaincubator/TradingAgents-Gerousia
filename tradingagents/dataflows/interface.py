@@ -10,6 +10,7 @@ from .coingecko_utils import (
 )
 from .treeofalpha_utils import get_treeofalpha_sentiment
 from .polymarket_utils import get_polymarket_sentiment as _polymarket_sentiment
+from .fred_utils import get_fred_macro_snapshot as _fred_snapshot
 from .tradfi_utils import (
     get_tradfi_price_history as _tradfi_price_history,
     get_tradfi_technical_analysis as _tradfi_technical_analysis,
@@ -876,6 +877,16 @@ def get_crypto_news_analysis(
         String containing news and trends
     """
     return get_crypto_news(symbol, curr_date, look_back_days)
+
+
+def get_fred_macro_data(
+    curr_date: Annotated[str, "Current date in YYYY-MM-DD format"],
+) -> str:
+    """
+    Fetch latest FRED macro indicators across Growth, Labor, and Liquidity.
+    Requires FRED_API environment variable.
+    """
+    return _fred_snapshot(curr_date)
 
 
 def get_polymarket_data(
