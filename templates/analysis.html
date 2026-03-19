@@ -541,11 +541,29 @@
             <div class="panel">
                 <h5><i class="fas fa-users"></i> Agent Status</h5>
                 <div id="agentStatus">
-                    <div class="agent-status pending" data-agent="Market Analyst">
+
+                    <!-- ── Analyst Team ─────────────────────────────── -->
+                    <div class="small text-muted mb-1 mt-2" style="font-weight:600;letter-spacing:.05em;text-transform:uppercase;font-size:.7rem;">Analyst Team</div>
+
+                    <div class="agent-status pending" data-agent="Market Analyst (5m)">
                         <div class="status-icon pending"><i class="fas fa-circle"></i></div>
                         <div>
-                            <strong>Market Analyst</strong>
-                            <div class="small text-muted">Technical analysis</div>
+                            <strong>Market Analyst (5m)</strong>
+                            <div class="small text-muted">Short-term price action</div>
+                        </div>
+                    </div>
+                    <div class="agent-status pending" data-agent="Market Analyst (4h)">
+                        <div class="status-icon pending"><i class="fas fa-circle"></i></div>
+                        <div>
+                            <strong>Market Analyst (4h)</strong>
+                            <div class="small text-muted">Medium/long-term trend</div>
+                        </div>
+                    </div>
+                    <div class="agent-status pending" data-agent="Polymarket Analyst">
+                        <div class="status-icon pending"><i class="fas fa-circle"></i></div>
+                        <div>
+                            <strong>Polymarket Analyst</strong>
+                            <div class="small text-muted">Prediction market odds</div>
                         </div>
                     </div>
                     <div class="agent-status pending" data-agent="Social Analyst">
@@ -559,51 +577,102 @@
                         <div class="status-icon pending"><i class="fas fa-circle"></i></div>
                         <div>
                             <strong>News Analyst</strong>
-                            <div class="small text-muted">News analysis</div>
+                            <div class="small text-muted">News &amp; macro</div>
                         </div>
                     </div>
                     <div class="agent-status pending" data-agent="Fundamentals Analyst">
                         <div class="status-icon pending"><i class="fas fa-circle"></i></div>
                         <div>
                             <strong>Fundamentals Analyst</strong>
-                            <div class="small text-muted">Financial fundamentals</div>
+                            <div class="small text-muted">Fundamental analysis</div>
                         </div>
                     </div>
+
+                    <!-- ── Research Team ────────────────────────────── -->
+                    <div class="small text-muted mb-1 mt-2" style="font-weight:600;letter-spacing:.05em;text-transform:uppercase;font-size:.7rem;">Research Team</div>
+
                     <div class="agent-status pending" data-agent="Bull Researcher">
                         <div class="status-icon pending"><i class="fas fa-circle"></i></div>
                         <div>
                             <strong>Bull Researcher</strong>
-                            <div class="small text-muted">Bullish research</div>
+                            <div class="small text-muted">Fundamental bullish case</div>
                         </div>
                     </div>
                     <div class="agent-status pending" data-agent="Bear Researcher">
                         <div class="status-icon pending"><i class="fas fa-circle"></i></div>
                         <div>
                             <strong>Bear Researcher</strong>
-                            <div class="small text-muted">Bearish research</div>
+                            <div class="small text-muted">Fundamental bearish case</div>
+                        </div>
+                    </div>
+                    <div class="agent-status pending" data-agent="CTA Researcher">
+                        <div class="status-icon pending"><i class="fas fa-circle"></i></div>
+                        <div>
+                            <strong>CTA Researcher</strong>
+                            <div class="small text-muted">Trend-following signal</div>
+                        </div>
+                    </div>
+                    <div class="agent-status pending" data-agent="Contrarian Researcher">
+                        <div class="status-icon pending"><i class="fas fa-circle"></i></div>
+                        <div>
+                            <strong>Contrarian Researcher</strong>
+                            <div class="small text-muted">Asymmetric / low-delta play</div>
+                        </div>
+                    </div>
+                    <div class="agent-status pending" data-agent="Retail Researcher">
+                        <div class="status-icon pending"><i class="fas fa-circle"></i></div>
+                        <div>
+                            <strong>Retail Researcher</strong>
+                            <div class="small text-muted">FOMO &amp; retail dynamics</div>
                         </div>
                     </div>
                     <div class="agent-status pending" data-agent="Research Manager">
                         <div class="status-icon pending"><i class="fas fa-circle"></i></div>
                         <div>
                             <strong>Research Manager</strong>
-                            <div class="small text-muted">Research coordination</div>
+                            <div class="small text-muted">Synthesises all 5 views</div>
                         </div>
                     </div>
+
+                    <!-- ── Trading Team ─────────────────────────────── -->
+                    <div class="small text-muted mb-1 mt-2" style="font-weight:600;letter-spacing:.05em;text-transform:uppercase;font-size:.7rem;">Trading &amp; Risk</div>
+
                     <div class="agent-status pending" data-agent="Trader">
                         <div class="status-icon pending"><i class="fas fa-circle"></i></div>
                         <div>
                             <strong>Trader</strong>
-                            <div class="small text-muted">Trading strategy</div>
+                            <div class="small text-muted">TP / SL / trade plan</div>
+                        </div>
+                    </div>
+                    <div class="agent-status pending" data-agent="Risky Analyst">
+                        <div class="status-icon pending"><i class="fas fa-circle"></i></div>
+                        <div>
+                            <strong>Risky Analyst</strong>
+                            <div class="small text-muted">Aggressive risk view</div>
+                        </div>
+                    </div>
+                    <div class="agent-status pending" data-agent="Safe Analyst">
+                        <div class="status-icon pending"><i class="fas fa-circle"></i></div>
+                        <div>
+                            <strong>Safe Analyst</strong>
+                            <div class="small text-muted">Conservative risk view</div>
+                        </div>
+                    </div>
+                    <div class="agent-status pending" data-agent="Neutral Analyst">
+                        <div class="status-icon pending"><i class="fas fa-circle"></i></div>
+                        <div>
+                            <strong>Neutral Analyst</strong>
+                            <div class="small text-muted">Balanced risk view</div>
                         </div>
                     </div>
                     <div class="agent-status pending" data-agent="Portfolio Manager">
                         <div class="status-icon pending"><i class="fas fa-circle"></i></div>
                         <div>
                             <strong>Portfolio Manager</strong>
-                            <div class="small text-muted">Portfolio decisions</div>
+                            <div class="small text-muted">Final trade decision</div>
                         </div>
                     </div>
+
                 </div>
             </div>
             
@@ -845,6 +914,7 @@
         }
         
         const sectionTitles = {
+            'polymarket_report':     'Polymarket Prediction Market Signals',
             'market_report':         'Market Analysis (5m)',
             'market_4h_report':      'Market Analysis (4h)',
             'sentiment_report':      'Social Sentiment',
