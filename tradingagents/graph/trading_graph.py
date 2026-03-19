@@ -237,6 +237,11 @@ class TradingAgentsGraph:
                     self.toolkit.get_crypto_market_analysis,
                 ]
             ),
+            "polymarket": ToolNode(
+                [
+                    self.toolkit.get_polymarket_data,
+                ]
+            ),
             "market_4h": ToolNode(
                 [
                     self.toolkit.get_crypto_4h_price_history,

@@ -60,6 +60,7 @@ class AgentState(MessagesState):
     past_analysis: Annotated[str, "Scored history and reasoning from previous analysis runs"]
 
     # research step
+    polymarket_report: Annotated[str, "Report from the Polymarket Prediction Market Analyst"]
     market_report: Annotated[str, "Report from the 5m Market Analyst"]
     market_4h_report: Annotated[str, "Report from the 4h Market Analyst"]
     sentiment_report: Annotated[str, "Report from the Social Media Analyst"]

@@ -88,6 +88,13 @@ class GraphSetup:
             delete_nodes["news"] = create_msg_delete()
             tool_nodes["news"] = self.tool_nodes["news"]
 
+        if "polymarket" in selected_analysts:
+            analyst_nodes["polymarket"] = create_polymarket_analyst(
+                self.quick_thinking_llm, self.toolkit
+            )
+            delete_nodes["polymarket"] = create_msg_delete()
+            tool_nodes["polymarket"] = self.tool_nodes["polymarket"]
+
         if "fundamentals" in selected_analysts:
             analyst_nodes["fundamentals"] = create_fundamentals_analyst(
                 self.quick_thinking_llm, self.toolkit
@@ -120,10 +127,11 @@ class GraphSetup:
 
         # Human-readable analyst display names
         _analyst_display = {
-            "market":     "Market",
-            "market_4h":  "Market 4H",
-            "social":     "Social",
-            "news":       "News",
+            "market":       "Market",
+            "market_4h":    "Market 4H",
+            "polymarket":   "Polymarket",
+            "social":       "Social",
+            "news":         "News",
             "fundamentals": "Fundamentals",
         }
 

@@ -9,6 +9,7 @@ from .coingecko_utils import (
     get_crypto_news,
 )
 from .treeofalpha_utils import get_treeofalpha_sentiment
+from .polymarket_utils import get_polymarket_sentiment as _polymarket_sentiment
 from .tradfi_utils import (
     get_tradfi_price_history as _tradfi_price_history,
     get_tradfi_technical_analysis as _tradfi_technical_analysis,
@@ -875,6 +876,20 @@ def get_crypto_news_analysis(
         String containing news and trends
     """
     return get_crypto_news(symbol, curr_date, look_back_days)
+
+
+def get_polymarket_data(
+    symbol: Annotated[str, "Asset ticker e.g. BTC, ETH, GOLD, SPX"],
+    curr_date: Annotated[str, "Current date in YYYY-MM-DD format"],
+) -> str:
+    """
+    Fetch live Polymarket prediction markets relevant to the asset, derive
+    market-implied bull/bear probabilities with time horizon, and append a
+    timestamped record to disk.
+    """
+    config    = get_config()
+    cache_dir = os.path.join(config.get("data_cache_dir", "./data"), "polymarket_cache")
+    return _polymarket_sentiment(symbol, curr_date, cache_dir)
 
 
 def get_crypto_4h_price_history(

@@ -43,6 +43,7 @@ class MessageBuffer:
         self.final_report = None  # Store the complete final report
         self.agent_status = {
             # Analyst Team
+            "Polymarket Analyst": "pending",
             "Market Analyst (5m)": "pending",
             "Market Analyst (4h)": "pending",
             "Social Analyst": "pending",
@@ -66,6 +67,7 @@ class MessageBuffer:
         }
         self.current_agent = None
         self.report_sections = {
+            "polymarket_report": None,
             "market_report": None,
             "market_4h_report": None,
             "sentiment_report": None,
@@ -743,6 +745,7 @@ def extract_content_string(content):
         return str(content)
 
 _SECTION_HEADINGS = {
+    "polymarket_report":    "## Polymarket Prediction Market Signals",
     "market_report":        "## Market Analysis (5m)",
     "market_4h_report":     "## Market Analysis (4h)",
     "sentiment_report":     "## Social Sentiment",

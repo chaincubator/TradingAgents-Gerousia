@@ -519,6 +519,28 @@ class Toolkit:
 
     @staticmethod
     @tool
+    def get_polymarket_data(
+        symbol: Annotated[str, "Asset ticker e.g. BTC, ETH, GOLD, SPX"],
+        curr_date: Annotated[str, "Current date in YYYY-MM-DD format"],
+    ) -> str:
+        """
+        Fetch live Polymarket prediction markets causally related to the asset.
+        Derives market-implied bull/bear probability with time horizon.
+        Uses CLOB order-book weighted prices (first 3 levels / $1000) when available.
+        Appends a timestamped record to disk.
+        Args:
+            symbol (str): Asset ticker e.g. 'BTC', 'ETH', 'GOLD', 'SPX'
+            curr_date (str): Current date in YYYY-MM-DD format
+        Returns:
+            str: Markdown report with market-implied probability tables
+        """
+        return _timed_call(
+            interface.get_polymarket_data, symbol, curr_date,
+            label=f"Polymarket Data ({symbol})"
+        )
+
+    @staticmethod
+    @tool
     def get_treeofalpha_sentiment(
         symbol: Annotated[str, "Cryptocurrency symbol like BTC, ETH, ADA"],
         curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],

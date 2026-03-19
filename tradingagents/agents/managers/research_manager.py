@@ -8,7 +8,8 @@ def create_research_manager(llm, memory):
         history = state["investment_debate_state"].get("history", "")
         market_research_report = state["market_report"]
         market_4h_report = state.get("market_4h_report", "")
-        past_analysis = state.get("past_analysis", "")
+        past_analysis     = state.get("past_analysis", "")
+        polymarket_report = state.get("polymarket_report", "")
         sentiment_report = state["sentiment_report"]
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
@@ -49,6 +50,9 @@ Weigh all five perspectives and make ONE clear, actionable recommendation: **Buy
 
 **Iterative context (scored history from prior runs):**
 {past_analysis}
+
+**Polymarket prediction market signals:**
+{polymarket_report}
 
 **Full debate history (Bull + Bear):**
 {history}

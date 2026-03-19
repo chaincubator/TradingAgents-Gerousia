@@ -15,6 +15,7 @@ from tradingagents.default_config import DEFAULT_CONFIG
 
 # Ordered section headings used when building combined Markdown reports
 _SECTION_HEADINGS = {
+    "polymarket_report":      "## Polymarket Prediction Market Signals",
     "market_report":          "## Market Analysis (5m)",
     "market_4h_report":       "## Market Analysis (4h)",
     "sentiment_report":       "## Social Sentiment",
@@ -169,6 +170,7 @@ class WebMessageBuffer:
         self.agent_status = {
             "Market Analyst (5m)": "pending",
             "Market Analyst (4h)": "pending",
+            "Polymarket Analyst": "pending",
             "Social Analyst": "pending",
             "News Analyst": "pending",
             "Fundamentals Analyst": "pending",
@@ -189,6 +191,7 @@ class WebMessageBuffer:
             "sentiment_report": None,
             "news_report": None,
             "market_4h_report": None,
+            "polymarket_report": None,
             "fundamentals_report": None,
             "investment_plan": None,
             "trader_investment_plan": None,
@@ -384,6 +387,11 @@ def run_analysis_background(session_id: str, config: Dict):
                         buffer.update_report_section("market_4h_report", chunk["market_4h_report"])
                         buffer.update_agent_status("Market Analyst (4h)", "completed")
                         buffer.update_progress(progress, f"[{ticker}] Market 4h analysis completed")
+
+                    if "polymarket_report" in chunk and chunk["polymarket_report"]:
+                        buffer.update_report_section("polymarket_report", chunk["polymarket_report"])
+                        buffer.update_agent_status("Polymarket Analyst", "completed")
+                        buffer.update_progress(progress, f"[{ticker}] Polymarket analysis completed")
 
                     if "sentiment_report" in chunk and chunk["sentiment_report"]:
                         buffer.update_report_section("sentiment_report", chunk["sentiment_report"])
