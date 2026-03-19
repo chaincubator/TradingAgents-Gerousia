@@ -9,7 +9,10 @@ from .coingecko_utils import (
     get_crypto_news,
 )
 from .treeofalpha_utils import get_treeofalpha_sentiment
-from .polymarket_utils import get_polymarket_sentiment as _polymarket_sentiment
+from .polymarket_utils import (
+    get_polymarket_sentiment as _polymarket_sentiment,
+    read_price_levels_cache  as _read_price_levels,
+)
 from .fred_utils import get_fred_macro_snapshot as _fred_snapshot
 from .tradfi_utils import (
     get_tradfi_price_history as _tradfi_price_history,
@@ -894,13 +897,38 @@ def get_polymarket_data(
     curr_date: Annotated[str, "Current date in YYYY-MM-DD format"],
 ) -> str:
     """
-    Fetch live Polymarket prediction markets relevant to the asset, derive
-    market-implied bull/bear probabilities with time horizon, and append a
-    timestamped record to disk.
+    Fetch live Polymarket prediction markets relevant to the asset.
+    Focuses on short-term (≤30d) non-neutral markets.
+    Builds a probability surface from price-level markets to derive
+    50% and 90% confidence price ranges.
+    Compares current price to the expected range.
+    Caches structured price-level data for downstream agents.
     """
     config    = get_config()
     cache_dir = os.path.join(config.get("data_cache_dir", "./data"), "polymarket_cache")
-    return _polymarket_sentiment(symbol, curr_date, cache_dir)
+    binance_cache = os.path.join(config.get("data_cache_dir", "./data"), "binance_cache")
+
+    # Try to get current price for comparison
+    current_price = None
+    try:
+        from .binance_utils import fetch_klines
+        from .tradfi_utils import classify_symbol
+        asset_type = classify_symbol(symbol)
+        if asset_type == "crypto":
+            df = fetch_klines(symbol, curr_date, curr_date, binance_cache)
+            if df is not None and not df.empty:
+                current_price = float(df["close"].iloc[-1])
+        elif asset_type == "tradfi":
+            from .tradfi_utils import get_yf_ticker
+            import yfinance as yf
+            yf_tick = get_yf_ticker(symbol)
+            hist = yf.Ticker(yf_tick).history(period="2d", interval="1d")
+            if not hist.empty:
+                current_price = float(hist["Close"].iloc[-1])
+    except Exception:
+        pass
+
+    return _polymarket_sentiment(symbol, curr_date, cache_dir, current_price)
 
 
 def get_crypto_4h_price_history(

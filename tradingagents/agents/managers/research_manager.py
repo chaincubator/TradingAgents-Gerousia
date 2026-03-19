@@ -9,7 +9,8 @@ def create_research_manager(llm, memory):
         market_research_report = state["market_report"]
         market_4h_report = state.get("market_4h_report", "")
         past_analysis     = state.get("past_analysis", "")
-        polymarket_report = state.get("polymarket_report", "")
+        polymarket_report       = state.get("polymarket_report", "")
+        polymarket_price_levels = state.get("polymarket_price_levels", "")
         fred_report       = state.get("fred_report", "")
         sentiment_report = state["sentiment_report"]
         news_report = state["news_report"]
@@ -54,6 +55,9 @@ Weigh all five perspectives and make ONE clear, actionable recommendation: **Buy
 
 **Polymarket prediction market signals:**
 {polymarket_report}
+
+**Polymarket price range (probability surface, 50%/90% CI):**
+{polymarket_price_levels}
 
 **FRED macro snapshot (Growth / Labor / Liquidity):**
 {fred_report}

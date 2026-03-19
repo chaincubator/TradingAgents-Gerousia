@@ -89,6 +89,7 @@ Social sentiment: {sentiment_report}
 News: {news_report}
 Fundamentals: {fundamentals_report}
 Full debate history (including CTA view): {history}
+Polymarket price range (50%/90% CI vs current price): {polymarket_price_levels}
 CTA researcher's perspective: {cta_perspective}
 
 Speak conversationally. Be specific about the asymmetric setup you see. If no genuine contrarian opportunity exists, say so honestly. Be concise and direct. Keep your response under 4096 characters.

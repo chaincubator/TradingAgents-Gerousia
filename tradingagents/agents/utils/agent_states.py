@@ -60,8 +60,9 @@ class AgentState(MessagesState):
     past_analysis: Annotated[str, "Scored history and reasoning from previous analysis runs"]
 
     # research step
-    fred_report:       Annotated[str, "Report from the FRED Quantitative Macro Analyst"]
-    polymarket_report: Annotated[str, "Report from the Polymarket Prediction Market Analyst"]
+    fred_report:            Annotated[str, "Report from the FRED Quantitative Macro Analyst"]
+    polymarket_report:      Annotated[str, "Report from the Polymarket Prediction Market Analyst"]
+    polymarket_price_levels: Annotated[str, "Polymarket probability-surface implied price ranges (50%/90% CI)"]
     market_report: Annotated[str, "Report from the 5m Market Analyst"]
     market_4h_report: Annotated[str, "Report from the 4h Market Analyst"]
     sentiment_report: Annotated[str, "Report from the Social Media Analyst"]

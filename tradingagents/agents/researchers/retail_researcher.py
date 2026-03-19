@@ -97,6 +97,7 @@ Social sentiment (key input): {sentiment_report}
 News (key input): {news_report}
 Fundamentals (context): {fundamentals_report}
 Full debate history: {history}
+Polymarket price range (50%/90% CI vs current price): {polymarket_price_levels}
 CTA researcher's perspective: {cta_perspective}
 Contrarian researcher's perspective: {contrarian_perspective}
 

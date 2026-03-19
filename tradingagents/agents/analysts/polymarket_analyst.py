@@ -6,8 +6,10 @@ asset under analysis.  Cross-references the implied bull/bear probabilities
 against price-action and sentiment data to identify conviction or divergence.
 """
 
+import os
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from tradingagents.dataflows.tradfi_utils import classify_symbol, get_instrument_info
+from tradingagents.dataflows.polymarket_utils import read_price_levels_cache
 
 
 def create_polymarket_analyst(llm, toolkit):
@@ -71,13 +73,25 @@ def create_polymarket_analyst(llm, toolkit):
         chain  = prompt | llm.bind_tools(tools)
         result = chain.invoke(state["messages"])
 
-        report = ""
+        report       = ""
+        price_levels = ""
         if len(result.tool_calls) == 0:
             report = result.content
+            # Read the probability-surface price ranges that were cached
+            # by get_polymarket_data() when the tool was called
+            try:
+                config    = toolkit.config
+                cache_dir = os.path.join(
+                    config.get("data_cache_dir", "./data"), "polymarket_cache"
+                )
+                price_levels = read_price_levels_cache(ticker, cache_dir)
+            except Exception:
+                price_levels = ""
 
         return {
-            "messages":         [result],
-            "polymarket_report": report,
+            "messages":              [result],
+            "polymarket_report":     report,
+            "polymarket_price_levels": price_levels,
         }
 
     return polymarket_analyst_node

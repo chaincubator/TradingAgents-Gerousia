@@ -53,6 +53,7 @@ class Propagator:
             ),
             "fred_report": "",
             "polymarket_report": "",
+            "polymarket_price_levels": "",
             "market_report": "",
             "market_4h_report": "",
             "fundamentals_report": "",

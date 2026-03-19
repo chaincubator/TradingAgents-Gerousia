@@ -19,6 +19,7 @@ def create_bear_researcher(llm, memory):
 
         past_analysis      = state.get("past_analysis", "")
         polymarket_report  = state.get("polymarket_report", "")
+        polymarket_price_levels = state.get("polymarket_price_levels", "")
         fred_report        = state.get("fred_report", "")
         curr_situation = f"{market_research_report}\n\n{sentiment_report}\n\n{news_report}\n\n{fundamentals_report}"
         past_memories = memory.get_memories(curr_situation, n_matches=2)
@@ -41,6 +42,7 @@ Resources available:
 
 Past analysis & scored recommendations: {past_analysis}
 Polymarket prediction market signals: {polymarket_report}
+Polymarket price range (50%/90% CI vs current price): {polymarket_price_levels}
 FRED macro snapshot (Growth/Labor/Liquidity): {fred_report}
 Market research report (5m): {market_research_report}
 Market research report (4h): {market_4h_report}
