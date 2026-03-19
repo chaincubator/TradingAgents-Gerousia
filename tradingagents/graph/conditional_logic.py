@@ -17,7 +17,7 @@ class ConditionalLogic:
         last_message = messages[-1]
         if last_message.tool_calls:
             return "tools_fred"
-        return "Msg Clear Fred"
+        return "Msg Clear FRED Macro"
 
     def should_continue_polymarket(self, state: AgentState):
         """Determine if Polymarket analysis should continue."""
