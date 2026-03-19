@@ -37,6 +37,7 @@ def create_contrarian_researcher(llm):
         news_report         = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
         past_analysis       = state.get("past_analysis", "")
+        polymarket_price_levels = state.get("polymarket_price_levels", "")
 
         prompt = f"""You are a Contrarian Researcher who specialises in **asymmetric, low-probability / high-payout setups** — the financial equivalent of buying out-of-the-money options. You actively seek opportunities the consensus is ignoring or has priced incorrectly.
 

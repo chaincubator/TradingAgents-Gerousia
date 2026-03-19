@@ -42,6 +42,7 @@ def create_retail_researcher(llm):
         news_report         = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
         past_analysis       = state.get("past_analysis", "")
+        polymarket_price_levels = state.get("polymarket_price_levels", "")
 
         prompt = f"""You are the Retail Madness Researcher. Your job is to channel the collective psychology of retail investors — the FOMO-driven, social-media-influenced, recency-biased crowd. You are **not** being asked to behave irrationally; you are asked to *analyse* how retail behaviour is likely influencing price right now and what it implies for the trade.
 

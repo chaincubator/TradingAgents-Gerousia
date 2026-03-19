@@ -28,6 +28,7 @@ def create_cta_researcher(llm):
         news_report       = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
         past_analysis     = state.get("past_analysis", "")
+        polymarket_price_levels = state.get("polymarket_price_levels", "")
 
         prompt = f"""You are a CTA (Commodity Trading Advisor) Researcher using a **systematic trend-following** framework. Your edge comes from one core belief: *price is the only truth that matters*. Fundamentals and sentiment are noise until reflected in price.
 
