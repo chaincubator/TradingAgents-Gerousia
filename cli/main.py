@@ -799,7 +799,8 @@ def _patch_message_buffer(log_file: Path, report_dir: Path):
     message_buffer.update_report_section = _report
 
 
-def _run_ticker_analysis(ticker: str, analysis_date: str, selections, graph, layout) -> dict:
+def _run_ticker_analysis(ticker: str, analysis_date: str, selections, graph, layout,
+                         fred_report: str = "") -> dict:
     """Run the full agent pipeline for a single ticker and return final_state."""
     update_display(layout)
 
@@ -824,7 +825,9 @@ def _run_ticker_analysis(ticker: str, analysis_date: str, selections, graph, lay
 
     update_display(layout, f"Analyzing {ticker} on {analysis_date}...")
 
-    init_agent_state = graph.propagator.create_initial_state(ticker, analysis_date)
+    init_agent_state = graph.propagator.create_initial_state(
+        ticker, analysis_date, past_context, fred_report
+    )
     args = graph.propagator.get_graph_args()
 
     # Stream the analysis
@@ -987,10 +990,23 @@ def run_analysis():
     config["backend_url"] = selections["backend_url"]
     config["llm_provider"] = selections["llm_provider"].lower()
 
+    # FRED is macro-level — fetch once and share across all tokens
+    all_analyst_values = [a.value for a in selections["analysts"]]
+    prefetched_fred = ""
+    if "fred" in all_analyst_values:
+        console.print("[dim]Fetching FRED macro data (runs once for all tokens)…[/dim]")
+        try:
+            import tradingagents.dataflows.interface as _iface
+            prefetched_fred = _iface.get_fred_macro_data(analysis_date)
+            message_buffer.update_agent_status("FRED Macro Analyst", "completed")
+        except Exception as _e:
+            prefetched_fred = f"FRED data unavailable: {_e}"
+
+    # Build graph WITHOUT the fred analyst (its data is pre-populated)
+    graph_analysts = [v for v in all_analyst_values if v != "fred"]
+
     # Graph is ticker-agnostic — initialise once for all tickers
-    graph = TradingAgentsGraph(
-        [analyst.value for analyst in selections["analysts"]], config=config, debug=True
-    )
+    graph = TradingAgentsGraph(graph_analysts, config=config, debug=True)
 
     layout = create_layout()
     symbol_results = {}
@@ -1022,7 +1038,9 @@ def run_analysis():
             message_buffer.current_report = None
             message_buffer.final_report = None
 
-            final_state = _run_ticker_analysis(ticker, analysis_date, selections, graph, layout)
+            final_state = _run_ticker_analysis(
+                ticker, analysis_date, selections, graph, layout, prefetched_fred
+            )
             symbol_results[ticker] = final_state
 
             # Save combined full_report.md for this ticker

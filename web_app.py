@@ -341,16 +341,33 @@ def run_analysis_background(session_id: str, config: Dict):
 
         buffer.add_message("System", f"Initializing analysis for {', '.join(tickers)}...")
 
+        # FRED is macro-level — fetch once and share across all tokens
+        prefetched_fred = ""
+        if "fred" in config['analysts']:
+            buffer.add_message("System", "Fetching FRED macro data (runs once for all tokens)...")
+            buffer.update_agent_status("FRED Macro Analyst", "in_progress")
+            try:
+                import tradingagents.dataflows.interface as _iface
+                prefetched_fred = _iface.get_fred_macro_data(config['analysis_date'])
+                buffer.update_agent_status("FRED Macro Analyst", "completed")
+                buffer.add_message("System", "FRED macro data ready.")
+            except Exception as _e:
+                prefetched_fred = f"FRED data unavailable: {_e}"
+                buffer.update_agent_status("FRED Macro Analyst", "completed")
+
+        # Build graph WITHOUT the fred analyst (its data is pre-populated in state)
+        graph_analysts = [a for a in config['analysts'] if a != "fred"]
+
         # Graph is ticker-agnostic — initialise once
         graph = TradingAgentsGraph(
-            selected_analysts=config['analysts'],
+            selected_analysts=graph_analysts,
             debug=False,
             config=updated_config
         )
         buffer.add_message("System", "Graph initialized successfully")
 
         args = graph.propagator.get_graph_args()
-        total_steps = len(config['analysts']) * 2 + 5
+        total_steps = len(graph_analysts) * 2 + 5
         symbol_results = {}
 
         for ticker_idx, ticker in enumerate(tickers):
@@ -365,7 +382,9 @@ def run_analysis_background(session_id: str, config: Dict):
                 'analysis_date': config['analysis_date']
             }, room=session_id)
 
-            init_state = graph.propagator.create_initial_state(ticker, config['analysis_date'])
+            init_state = graph.propagator.create_initial_state(
+                ticker, config['analysis_date'], fred_report=prefetched_fred
+            )
 
             step_count = 0
             for chunk in graph.graph.stream(init_state, **args):
