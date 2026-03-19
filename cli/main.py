@@ -110,17 +110,18 @@ class MessageBuffer:
         if latest_section and latest_content:
             # Format the current section for display
             section_titles = {
-                "market_report": "Market Analysis (5m)",
-                "market_4h_report": "Market Analysis (4h)",
-                "sentiment_report": "Social Sentiment",
-                "news_report": "News Analysis",
-                "fundamentals_report": "Fundamentals Analysis",
-                "investment_plan": "Research Team Decision",
-                "trader_investment_plan": "Trading Team Plan",
-                "final_trade_decision": "Portfolio Management Decision",
+                "polymarket_report":     "Polymarket Signals",
+                "market_report":         "Market Analysis (5m)",
+                "market_4h_report":      "Market Analysis (4h)",
+                "sentiment_report":      "Social Sentiment",
+                "news_report":           "News Analysis",
+                "fundamentals_report":   "Fundamentals Analysis",
+                "investment_plan":       "Research Team Decision",
+                "trader_investment_plan":"Trading Plan",
+                "final_trade_decision":  "Final Trade Decision",
             }
             self.current_report = (
-                f"### {section_titles[latest_section]}\n{latest_content}"
+                f"### {section_titles.get(latest_section, latest_section)}\n{latest_content}"
             )
 
         # Update the final complete report
@@ -130,32 +131,25 @@ class MessageBuffer:
         report_parts = []
 
         # Analyst Team Reports
-        if any(
-            self.report_sections[section]
-            for section in [
-                "market_report",
-                "sentiment_report",
-                "news_report",
-                "fundamentals_report",
-            ]
-        ):
+        analyst_sections = [
+            "polymarket_report", "market_report", "market_4h_report",
+            "sentiment_report", "news_report", "fundamentals_report",
+        ]
+        analyst_labels = {
+            "polymarket_report":  "Polymarket Prediction Market Signals",
+            "market_report":      "Market Analysis (5m)",
+            "market_4h_report":   "Market Analysis (4h)",
+            "sentiment_report":   "Social Sentiment",
+            "news_report":        "News Analysis",
+            "fundamentals_report":"Fundamentals Analysis",
+        }
+        if any(self.report_sections.get(s) for s in analyst_sections):
             report_parts.append("## Analyst Team Reports")
-            if self.report_sections["market_report"]:
-                report_parts.append(
-                    f"### Market Analysis\n{self.report_sections['market_report']}"
-                )
-            if self.report_sections["sentiment_report"]:
-                report_parts.append(
-                    f"### Social Sentiment\n{self.report_sections['sentiment_report']}"
-                )
-            if self.report_sections["news_report"]:
-                report_parts.append(
-                    f"### News Analysis\n{self.report_sections['news_report']}"
-                )
-            if self.report_sections["fundamentals_report"]:
-                report_parts.append(
-                    f"### Fundamentals Analysis\n{self.report_sections['fundamentals_report']}"
-                )
+            for sec in analyst_sections:
+                if self.report_sections.get(sec):
+                    report_parts.append(
+                        f"### {analyst_labels[sec]}\n{self.report_sections[sec]}"
+                    )
 
         # Research Team Reports
         if self.report_sections["investment_plan"]:
@@ -721,7 +715,11 @@ def display_complete_report(final_state):
 
 def update_research_team_status(status):
     """Update status for all research team members and trader."""
-    research_team = ["Bull Researcher", "Bear Researcher", "Research Manager", "Trader"]
+    research_team = [
+        "Bull Researcher", "Bear Researcher",
+        "CTA Researcher", "Contrarian Researcher", "Retail Researcher",
+        "Research Manager", "Trader",
+    ]
     for agent in research_team:
         message_buffer.update_agent_status(agent, status)
 
@@ -844,9 +842,15 @@ def _run_ticker_analysis(ticker: str, analysis_date: str, selections, graph, lay
                         message_buffer.add_tool_call(tool_call["name"], tool_call["args"])
                     else:
                         message_buffer.add_tool_call(tool_call.name, tool_call.args)
+            if "polymarket_report" in chunk and chunk["polymarket_report"]:
+                message_buffer.update_report_section("polymarket_report", chunk["polymarket_report"])
+                message_buffer.update_agent_status("Polymarket Analyst", "completed")
+            if "market_4h_report" in chunk and chunk["market_4h_report"]:
+                message_buffer.update_report_section("market_4h_report", chunk["market_4h_report"])
+                message_buffer.update_agent_status("Market Analyst (4h)", "completed")
             if "market_report" in chunk and chunk["market_report"]:
                 message_buffer.update_report_section("market_report", chunk["market_report"])
-                message_buffer.update_agent_status("Market Analyst", "completed")
+                message_buffer.update_agent_status("Market Analyst (5m)", "completed")
                 if "social" in [a.value for a in selections["analysts"]]:
                     message_buffer.update_agent_status("Social Analyst", "in_progress")
             if "sentiment_report" in chunk and chunk["sentiment_report"]:
@@ -884,6 +888,23 @@ def _run_ticker_analysis(ticker: str, analysis_date: str, selections, graph, lay
                             "investment_plan",
                             f"{message_buffer.report_sections['investment_plan']}\n\n### Bear Researcher Analysis\n{latest_bear}",
                         )
+                if "cta_perspective" in debate_state and debate_state["cta_perspective"]:
+                    message_buffer.update_agent_status("CTA Researcher", "in_progress")
+                    latest = debate_state["cta_perspective"].split("\n")[-1]
+                    if latest.strip():
+                        message_buffer.add_message("Reasoning", latest)
+                if "contrarian_perspective" in debate_state and debate_state["contrarian_perspective"]:
+                    message_buffer.update_agent_status("CTA Researcher", "completed")
+                    message_buffer.update_agent_status("Contrarian Researcher", "in_progress")
+                    latest = debate_state["contrarian_perspective"].split("\n")[-1]
+                    if latest.strip():
+                        message_buffer.add_message("Reasoning", latest)
+                if "retail_perspective" in debate_state and debate_state["retail_perspective"]:
+                    message_buffer.update_agent_status("Contrarian Researcher", "completed")
+                    message_buffer.update_agent_status("Retail Researcher", "in_progress")
+                    latest = debate_state["retail_perspective"].split("\n")[-1]
+                    if latest.strip():
+                        message_buffer.add_message("Reasoning", latest)
                 if "judge_decision" in debate_state and debate_state["judge_decision"]:
                     update_research_team_status("in_progress")
                     message_buffer.add_message("Reasoning", f"Research Manager: {debate_state['judge_decision']}")
