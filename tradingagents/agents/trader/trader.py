@@ -47,11 +47,13 @@ Additional research perspectives to consider alongside the investment plan:
 
 Do not forget to utilize lessons from past decisions. Reflections from similar situations: {past_memory_str}
 
-You MUST end your response with ALL FOUR of the following labelled lines (no exceptions):
+You MUST end your response with ALL SIX of the following labelled lines (no exceptions):
 FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL**
 TAKE PROFIT: $<specific price level>
 STOP LOSS: $<specific price level>
 VALIDITY: <duration, e.g. "3 days", "1 week", "2 weeks">
+EXPECTED RETURN: <e.g. "+12% over 7 days" or "-8% over 3 days">
+CONFIDENCE: <0–100%, your conviction in this recommendation>
 
 Be concise and direct. Keep your response under 4096 characters.""",
             },
