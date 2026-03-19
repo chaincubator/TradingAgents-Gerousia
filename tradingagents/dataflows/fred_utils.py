@@ -1,8 +1,9 @@
 """Federal Reserve Bank of St. Louis — FRED database utilities.
 
-Fetches macro-economic indicators across three categories:
-  Growth   — GDP, industrial production, consumer spending / sentiment
-  Labor    — unemployment, payrolls, job openings, wages
+Fetches macro-economic indicators across four categories:
+  Growth    — GDP, industrial production, consumer spending / sentiment
+  Inflation — CPI, PCE, PPI, breakeven rates, real yields
+  Labor     — unemployment, payrolls, job openings, wages
   Liquidity — money supply, Fed balance sheet, rates, credit spreads
 
 API key: set FRED_API environment variable.
@@ -53,11 +54,54 @@ _SERIES: Dict[str, Dict] = {
         "unit": "mn USD",
         "interpret": "YoY trend indicates consumer demand health",
     },
+    # ── Inflation ─────────────────────────────────────────────────────────────
+    "CPIAUCSL": {
+        "name": "CPI All Items (headline, YoY %)",
+        "category": "inflation",
+        "unit": "%",
+        "interpret": "Fed watches closely; >3% = hot; <2% = below target",
+    },
     "CPILFESL": {
         "name": "Core CPI (ex-food & energy, YoY %)",
-        "category": "growth",
+        "category": "inflation",
         "unit": "%",
-        "interpret": "Fed target ~2%; above = inflationary pressure",
+        "interpret": "Fed target ~2%; most persistent component",
+    },
+    "PCEPI": {
+        "name": "PCE Price Index (YoY %)",
+        "category": "inflation",
+        "unit": "%",
+        "interpret": "Fed's preferred broad inflation gauge; 2% = target",
+    },
+    "PCEPILFE": {
+        "name": "Core PCE (ex-food & energy, YoY %)",
+        "category": "inflation",
+        "unit": "%",
+        "interpret": "Fed's primary policy target; >2.5% = rate-hold pressure",
+    },
+    "T5YIE": {
+        "name": "5-Year Breakeven Inflation Rate (%)",
+        "category": "inflation",
+        "unit": "%",
+        "interpret": "market-implied 5Y avg inflation; rising = expectations unanchoring",
+    },
+    "T10YIE": {
+        "name": "10-Year Breakeven Inflation Rate (%)",
+        "category": "inflation",
+        "unit": "%",
+        "interpret": "long-run inflation expectations; >2.5% = concern",
+    },
+    "DFII10": {
+        "name": "10-Year TIPS Real Yield (%)",
+        "category": "inflation",
+        "unit": "%",
+        "interpret": "real cost of money; rising real yields = headwind for risk assets",
+    },
+    "PPIFIS": {
+        "name": "PPI Final Demand (YoY %)",
+        "category": "inflation",
+        "unit": "%",
+        "interpret": "upstream / producer prices; leads CPI by 2-3 months",
     },
 
     # ── Labor ─────────────────────────────────────────────────────────────────
@@ -143,9 +187,10 @@ _SERIES: Dict[str, Dict] = {
     },
 }
 
-_CATEGORY_ORDER = ["growth", "labor", "liquidity"]
+_CATEGORY_ORDER = ["growth", "inflation", "labor", "liquidity"]
 _CATEGORY_LABELS = {
     "growth":    "Growth",
+    "inflation": "Inflation",
     "labor":     "Labor Market",
     "liquidity": "Liquidity & Financial Conditions",
 }
@@ -211,8 +256,8 @@ def get_fred_macro_snapshot(
     The API key must be set in the FRED_API environment variable.
 
     Returns:
-        Formatted Markdown report with three sections:
-        Growth | Labor Market | Liquidity & Financial Conditions
+        Formatted Markdown report with four sections:
+        Growth | Inflation | Labor Market | Liquidity & Financial Conditions
     """
     key = _api_key()
     if not key:
@@ -286,29 +331,47 @@ def get_fred_macro_snapshot(
     lines.append("### Macro Regime Summary\n")
 
     # Growth signal
-    gdp_r   = results.get("A191RL1Q225SBEA")
-    sent_r  = results.get("UMCSENT")
-    cpi_r   = results.get("CPILFESL")
+    gdp_r         = results.get("A191RL1Q225SBEA")
     growth_signal = "Expansion" if (gdp_r and gdp_r["latest"] > 0) else "Contraction"
 
+    # Inflation signal
+    cpi_r      = results.get("CPIAUCSL")
+    core_cpi_r = results.get("CPILFESL")
+    core_pce_r = results.get("PCEPILFE")
+    be5y_r     = results.get("T5YIE")
+    real_r     = results.get("DFII10")
+    cpi_hot    = cpi_r      and cpi_r["latest"]      > 3.0
+    core_hot   = core_cpi_r and core_cpi_r["latest"] > 2.5
+    pce_hot    = core_pce_r and core_pce_r["latest"] > 2.5
+    be_rising  = be5y_r     and be5y_r["latest"]     > 2.5
+    real_high  = real_r     and real_r["latest"]     > 1.5
+    hot_signals = sum([bool(cpi_hot), bool(core_hot), bool(pce_hot), bool(be_rising)])
+    if hot_signals >= 3:
+        inflation_signal = "Hot (multiple gauges above target)"
+    elif hot_signals >= 1:
+        inflation_signal = "Elevated (some gauges above target)"
+    else:
+        inflation_signal = "Cooling / On-Target"
+    if real_high:
+        inflation_signal += " | Real yields elevated → risk-asset headwind"
+
     # Labor signal
-    unrate_r = results.get("UNRATE")
-    icsa_r   = results.get("ICSA")
+    unrate_r     = results.get("UNRATE")
     labor_signal = "Tight" if (unrate_r and unrate_r["latest"] < 4.5) else "Softening"
 
     # Liquidity signal
-    dff_r   = results.get("DFF")
-    t10y2y  = results.get("T10Y2Y")
-    hy_r    = results.get("BAMLH0A0HYM2")
-    spread_inverted = t10y2y and t10y2y["latest"] < 0
-    hy_stressed     = hy_r   and hy_r["latest"]   > 5.0
+    t10y2y           = results.get("T10Y2Y")
+    hy_r             = results.get("BAMLH0A0HYM2")
+    spread_inverted  = t10y2y and t10y2y["latest"] < 0
+    hy_stressed      = hy_r   and hy_r["latest"]   > 5.0
     liquidity_signal = "Tight / Risk-Off" if (spread_inverted or hy_stressed) else "Accommodative / Risk-On"
 
     lines += [
-        f"| Dimension | Signal |",
-        f"|-----------|--------|",
+        "| Dimension     | Signal |",
+        "|---------------|--------|",
         f"| **Growth**    | {growth_signal} |",
-        f"| **Labor**     | {labor_signal}  |",
+        f"| **Inflation** | {inflation_signal} |",
+        f"| **Labor**     | {labor_signal} |",
         f"| **Liquidity** | {liquidity_signal} |",
         "",
         "*Use these macro regime signals to contextualise price-action and sentiment data.*",
