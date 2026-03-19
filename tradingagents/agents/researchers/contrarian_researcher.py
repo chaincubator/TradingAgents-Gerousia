@@ -1,4 +1,5 @@
 from tradingagents.agents.utils.thinking import strip_thinking
+from tradingagents.agents.utils.context_utils import is_na
 """Contrarian Researcher — low-delta / high-payout asymmetric perspective.
 
 Trait profile drawn from public-domain knowledge of contrarian and
@@ -90,10 +91,11 @@ Social sentiment: {sentiment_report}
 News: {news_report}
 Fundamentals: {fundamentals_report}
 Full debate history (including CTA view): {history}
-Polymarket price range (50%/90% CI vs current price): {polymarket_price_levels}
+Polymarket price range (50%/90% CI vs current price): {polymarket_price_levels if not is_na(polymarket_price_levels) else ""}
 CTA researcher's perspective: {cta_perspective}
 
-Speak conversationally. Be specific about the asymmetric setup you see. If no genuine contrarian opportunity exists, say so honestly. Be concise and direct. Keep your response under 4096 characters.
+Speak conversationally. Be specific about the asymmetric setup you see. If no genuine contrarian opportunity exists, say so honestly. Any input report that begins with "NA" signals no data was available for that source. Ignore it entirely and base your analysis solely on the reports that do have content.
+Be concise and direct. Keep your response under 4096 characters.
 """
 
         response = llm.invoke(prompt)

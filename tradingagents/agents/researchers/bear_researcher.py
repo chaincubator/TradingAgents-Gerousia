@@ -2,6 +2,7 @@ from langchain_core.messages import AIMessage
 import time
 import json
 from tradingagents.agents.utils.thinking import strip_thinking
+from tradingagents.agents.utils.context_utils import is_na
 
 
 def create_bear_researcher(llm, memory):
@@ -41,9 +42,9 @@ Key points to focus on:
 Resources available:
 
 Past analysis & scored recommendations: {past_analysis}
-Polymarket prediction market signals: {polymarket_report}
-Polymarket price range (50%/90% CI vs current price): {polymarket_price_levels}
-FRED macro snapshot (Growth/Labor/Liquidity): {fred_report}
+Polymarket prediction market signals: {polymarket_report if not is_na(polymarket_report) else ""}
+Polymarket price range (50%/90% CI vs current price): {polymarket_price_levels if not is_na(polymarket_price_levels) else ""}
+FRED macro snapshot (Growth/Labor/Liquidity): {fred_report if not is_na(fred_report) else ""}
 Market research report (5m): {market_research_report}
 Market research report (4h): {market_4h_report}
 Social media sentiment report: {sentiment_report}
@@ -53,6 +54,7 @@ Conversation history of the debate: {history}
 Last bull argument: {current_response}
 Reflections from similar situations and lessons learned: {past_memory_str}
 Use this information to deliver a compelling bear argument, refute the bull's claims, and engage in a dynamic debate that demonstrates the risks and weaknesses of investing in the stock. You must also address reflections and learn from lessons and mistakes you made in the past.
+Any input report that begins with "NA" signals no data was available for that source. Ignore it entirely and base your analysis solely on the reports that do have content.
 Be concise and direct. Keep your response under 4096 characters.
 """
 

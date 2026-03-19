@@ -56,10 +56,7 @@ def get_treeofalpha_sentiment(
         Formatted string with news and social posts, or an error message.
     """
     if not os.getenv("TREE_OF_ALPHA_API"):
-        return (
-            "TREE_OF_ALPHA_API environment variable is not set. "
-            "Set it to your Tree of Alpha API key to enable social sentiment."
-        )
+        return "NA — TREE_OF_ALPHA_API environment variable not set."
 
     end = datetime.strptime(curr_date, "%Y-%m-%d")
     start = end - timedelta(days=look_back_days)
@@ -77,7 +74,7 @@ def get_treeofalpha_sentiment(
 
     if not news_items:
         return (
-            f"No Tree of Alpha news found for {sym} "
+            f"NA — no Tree of Alpha news found for {sym} "
             f"({start.strftime('%Y-%m-%d')} → {curr_date})."
         )
 

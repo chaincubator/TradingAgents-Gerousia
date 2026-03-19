@@ -70,7 +70,7 @@ def create_fred_analyst(llm, toolkit):
             "2. Specific bullish/bearish macro implications for this asset\n"
             "3. Key inflection points to watch (next Fed meeting, jobs report, CPI)\n"
             "4. Append a concise Markdown summary table.\n"
-            "Be concise and direct. Keep your response under 4096 characters."
+            "If the data tool returns a message starting with NA, report NA and the reason. Do not fabricate a neutral or 50/50 signal when data is absent. Be concise and direct. Keep your response under 4096 characters."
         )
 
         prompt = ChatPromptTemplate.from_messages([

@@ -1,4 +1,5 @@
 from tradingagents.agents.utils.thinking import strip_thinking
+from tradingagents.agents.utils.context_utils import is_na
 """Retail Madness Researcher — FOMO-driven retail investor behaviour perspective.
 
 Trait profile drawn from public-domain behavioural finance literature:
@@ -98,11 +99,12 @@ Social sentiment (key input): {sentiment_report}
 News (key input): {news_report}
 Fundamentals (context): {fundamentals_report}
 Full debate history: {history}
-Polymarket price range (50%/90% CI vs current price): {polymarket_price_levels}
+Polymarket price range (50%/90% CI vs current price): {polymarket_price_levels if not is_na(polymarket_price_levels) else ""}
 CTA researcher's perspective: {cta_perspective}
 Contrarian researcher's perspective: {contrarian_perspective}
 
-Speak with the energy and enthusiasm of someone who truly understands retail psychology. Be specific about what retail is likely doing right now and why it matters. Be concise and direct. Keep your response under 4096 characters.
+Speak with the energy and enthusiasm of someone who truly understands retail psychology. Be specific about what retail is likely doing right now and why it matters. Any input report that begins with "NA" signals no data was available for that source. Ignore it entirely and base your analysis solely on the reports that do have content.
+Be concise and direct. Keep your response under 4096 characters.
 """
 
         response = llm.invoke(prompt)

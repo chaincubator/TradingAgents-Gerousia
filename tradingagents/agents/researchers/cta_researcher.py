@@ -1,4 +1,5 @@
 from tradingagents.agents.utils.thinking import strip_thinking
+from tradingagents.agents.utils.context_utils import is_na
 """CTA (Commodity Trading Advisor) Researcher — systematic trend-following perspective.
 
 Trait profile drawn from public-domain knowledge of managed futures / CTA strategies:
@@ -77,7 +78,8 @@ News (context only): {news_report}
 Fundamentals (context only): {fundamentals_report}
 Bull/Bear debate history: {history}
 
-Present your analysis conversationally. State the trend clearly, back it with specific indicator readings from the reports, give a clear directional recommendation, and define the stop level. Be concise and direct. Keep your response under 4096 characters.
+Present your analysis conversationally. State the trend clearly, back it with specific indicator readings from the reports, give a clear directional recommendation, and define the stop level. Any input report that begins with "NA" signals no data was available for that source. Ignore it entirely and base your analysis solely on the reports that do have content.
+Be concise and direct. Keep your response under 4096 characters.
 """
 
         response = llm.invoke(prompt)

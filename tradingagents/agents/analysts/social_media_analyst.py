@@ -41,7 +41,7 @@ def create_social_media_analyst(llm, toolkit):
                 "the community, and any notable news events. Do not state trends are mixed "
                 "without evidence — provide specific insights that help crypto traders. "
                 "Append a concise Markdown table summarising key sentiment points. "
-                "Be concise and direct. Keep your response under 4096 characters."
+                "If the data tool returns a message starting with NA, report NA and the reason. Do not fabricate a neutral or 50/50 signal when data is absent. Be concise and direct. Keep your response under 4096 characters."
             )
         elif toolkit.config["online_tools"]:
             tools = [toolkit.get_stock_news_openai]

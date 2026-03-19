@@ -1,6 +1,7 @@
 import time
 import json
 from tradingagents.agents.utils.thinking import strip_thinking
+from tradingagents.agents.utils.context_utils import is_na
 
 
 def create_research_manager(llm, memory):
@@ -54,13 +55,13 @@ Weigh all five perspectives and make ONE clear, actionable recommendation: **Buy
 {past_analysis}
 
 **Polymarket prediction market signals:**
-{polymarket_report}
+{polymarket_report if not is_na(polymarket_report) else "(no Polymarket data)"}
 
 **Polymarket price range (probability surface, 50%/90% CI):**
-{polymarket_price_levels}
+{polymarket_price_levels if not is_na(polymarket_price_levels) else "(no price range data)"}
 
 **FRED macro snapshot (Growth / Labor / Liquidity):**
-{fred_report}
+{fred_report if not is_na(fred_report) else "(no FRED data)"}
 
 **Full debate history (Bull + Bear):**
 {history}
@@ -74,7 +75,8 @@ Weigh all five perspectives and make ONE clear, actionable recommendation: **Buy
 **Retail Researcher perspective:**
 {retail_perspective}
 
-Present your analysis conversationally, without special formatting. Be concise and direct. Keep your response under 4096 characters."""
+Present your analysis conversationally, without special formatting. Any input report that begins with "NA" signals no data was available for that source. Ignore it entirely and base your analysis solely on the reports that do have content.
+Be concise and direct. Keep your response under 4096 characters."""
         response = llm.invoke(prompt)
         content = strip_thinking(response.content)[:4096]
 

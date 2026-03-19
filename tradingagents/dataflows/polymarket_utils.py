@@ -331,6 +331,9 @@ def read_price_levels_cache(symbol: str, cache_dir: str) -> str:
         return ""
     try:
         d = json.loads(path.read_text(encoding="utf-8"))
+        if d.get("no_directional_signal") and not d.get("ranges"):
+            return (f"NA — no non-neutral Polymarket markets found for "
+                    f"{symbol.upper()} on {d.get('date','')}.")
         lines = [f"Polymarket Price Ranges for {symbol.upper()} ({d.get('date','')})"]
         r = d.get("ranges", {})
         if r.get("q50"):
@@ -392,7 +395,7 @@ def get_polymarket_sentiment(
         time.sleep(0.1)
 
     if not all_markets:
-        return "Polymarket: no live markets could be fetched."
+        return "NA — Polymarket API unavailable; no live markets could be fetched."
 
     # ── 2. Score relevance and compute days-to-expiry ─────────────────────────
     scored = []
@@ -407,7 +410,8 @@ def get_polymarket_sentiment(
         scored.append(m)
 
     if not scored:
-        return (f"No Polymarket markets causally related to {symbol_upper} found.")
+        return (f"NA — no live Polymarket markets with a clear causal relationship to "
+                f"{symbol_upper} were found across Crypto / Finance / Economy / Trending.")
 
     # Sort: short-term first, then by relevance, then by volume
     scored.sort(key=lambda m: (
@@ -495,36 +499,35 @@ def get_polymarket_sentiment(
     if ranges and current_price and current_price > 0:
         position_signal = _price_position_signal(current_price, ranges)
 
-    # ── 6. Aggregate bull/bear from non-neutral short-term markets ────────────
+    # ── 6. Aggregate bull/bear — only from non-neutral short-term markets ──────
+    # If no directional signal exists, we do NOT fabricate a 50/50 neutral.
+    no_directional_signal = False
     if directional:
         total_vol  = sum(e["volume"] for e in directional if e["volume"] > 0) or 1.0
         agg_bull_p = sum(
             e["bull_prob"] * (e["volume"] / total_vol)
             for e in directional if e["volume"] > 0
         )
-    elif all_enriched:
-        total_vol  = sum(e["volume"] for e in all_enriched if e["volume"] > 0) or 1.0
-        agg_bull_p = sum(
-            e["bull_prob"] * (e["volume"] / total_vol)
-            for e in all_enriched if e["volume"] > 0
-        )
+        agg_bull_p = round(max(0.0, min(1.0, agg_bull_p)), 3)
+        agg_bear_p = round(1.0 - agg_bull_p, 3)
     else:
-        agg_bull_p = 0.5
-    agg_bull_p = round(max(0.0, min(1.0, agg_bull_p)), 3)
-    agg_bear_p = round(1.0 - agg_bull_p, 3)
+        # No non-neutral markets found — directional signal is genuinely absent
+        no_directional_signal = True
+        agg_bull_p = agg_bear_p = None
 
     # ── 7. Save structured price-level cache for other agents ─────────────────
     cache_data = {
-        "symbol":         symbol_upper,
-        "date":           curr_date,
-        "ts":             datetime.now(timezone.utc).isoformat(),
-        "current_price":  current_price,
-        "bull_probability": agg_bull_p,
-        "bear_probability": agg_bear_p,
-        "position_signal":  position_signal,
-        "ranges":           ranges or {},
-        "surface_points":   [{"price": p, "survival": s}
-                              for p, s in sorted(price_surface_pts)],
+        "symbol":              symbol_upper,
+        "date":                curr_date,
+        "ts":                  datetime.now(timezone.utc).isoformat(),
+        "current_price":       current_price,
+        "bull_probability":    agg_bull_p,
+        "bear_probability":    agg_bear_p,
+        "no_directional_signal": no_directional_signal,
+        "position_signal":     position_signal,
+        "ranges":              ranges or {},
+        "surface_points":      [{"price": p, "survival": s}
+                                 for p, s in sorted(price_surface_pts)],
         "directional_markets": len(directional),
     }
     _save_price_levels(cache_dir, symbol_upper, cache_data)
@@ -536,12 +539,21 @@ def get_polymarket_sentiment(
         f.write(json.dumps(cache_data, default=str) + "\n")
 
     # ── 9. Format Markdown report ─────────────────────────────────────────────
-    bias = "Bullish" if agg_bull_p > 0.55 else ("Bearish" if agg_bull_p < 0.45 else "Neutral")
+    if no_directional_signal:
+        bias_line = (
+            f"**Directional bias:** NA — no non-neutral short-term (≤{_SHORT_TERM_DAYS}d) "
+            "markets found; cannot derive a bull/bear signal from Polymarket."
+        )
+    else:
+        bias = "Bullish" if agg_bull_p > 0.55 else ("Bearish" if agg_bull_p < 0.45 else "Neutral")
+        bias_line = (
+            f"**Directional bias (non-neutral, ≤{_SHORT_TERM_DAYS}d markets):** {bias}  |  "
+            f"Bull: **{agg_bull_p:.0%}**  |  Bear: **{agg_bear_p:.0%}**"
+        )
 
     lines = [
         f"## {symbol_upper} Polymarket Prediction Market Signals\n",
-        f"**Directional bias (non-neutral, ≤{_SHORT_TERM_DAYS}d markets):** {bias}  |  "
-        f"Bull: **{agg_bull_p:.0%}**  |  Bear: **{agg_bear_p:.0%}**\n",
+        bias_line + "\n",
     ]
 
     # Probability surface section

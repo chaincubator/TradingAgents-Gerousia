@@ -261,10 +261,7 @@ def get_fred_macro_snapshot(
     """
     key = _api_key()
     if not key:
-        return (
-            "FRED_API environment variable is not set. "
-            "Set it to your FRED API key to enable macro indicator data."
-        )
+        return "NA — FRED_API environment variable not set."
 
     # ── Fetch all series ──────────────────────────────────────────────────────
     results: Dict[str, dict] = {}
@@ -297,7 +294,7 @@ def get_fred_macro_snapshot(
             continue
 
     if not results:
-        return "FRED data could not be fetched. The API may be temporarily unavailable."
+        return "NA — FRED data could not be retrieved (API unavailable or all series failed)."
 
     # ── Format report ─────────────────────────────────────────────────────────
     lines = [

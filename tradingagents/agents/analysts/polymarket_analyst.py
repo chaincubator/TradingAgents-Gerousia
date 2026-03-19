@@ -51,7 +51,7 @@ def create_polymarket_analyst(llm, toolkit):
             "- Does the prediction market signal confirm or diverge from technical and "
             "fundamental analysis?\n\n"
             "Produce a concise, actionable report. Append a summary Markdown table. "
-            "Be concise and direct. Keep your response under 4096 characters."
+            "If the data tool returns a message starting with NA, report NA and the reason. Do not fabricate a neutral or 50/50 signal when data is absent. Be concise and direct. Keep your response under 4096 characters."
         )
 
         prompt = ChatPromptTemplate.from_messages([
