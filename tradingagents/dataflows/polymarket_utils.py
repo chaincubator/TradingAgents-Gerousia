@@ -1,28 +1,41 @@
-"""Polymarket prediction-market data utilities — v3.
+"""Polymarket prediction-market data utilities — v4.
 
-Enhancements over v2:
-  • Tighter time bucketing: intraday (<6h), overnight (6-24h), short (1-3d),
-    weekly (3-7d), medium (7-30d) — markets prioritised by urgency tier.
-  • Probability velocity: per-market YES-prob delta vs. last run (signals.jsonl).
-    Fast-moving markets (>=3%/h) are flagged as highest-priority signals.
-  • OB conviction score: bid-ask spread as fraction of mid-price used as a
-    weight multiplier that down-grades illiquid or disagreement-heavy markets.
-  • Urgency x conviction weighted aggregate: effective_weight =
-    volume x (1/hours_to_expiry) x conviction, so intraday markets dominate.
-  • Multi-horizon probability ladder: separate implied price ranges (P25-P75,
-    P10-P90) per time bucket from price-level markets.
-  • Price level magnets: cluster market price-strike levels into ~1% bins;
-    bins with multiple references are crowd support/resistance zones.
-  • Consensus breadth score: fraction of relevant markets that are non-neutral
-    and directionally aligned — distinguishes broad consensus from outliers.
-  • Lognormal implied volatility: annualised sigma fitted per bucket from the
-    probability surface (requires scipy; silently skipped if absent).
-  • Cross-asset coherence: new public function comparing directional signals
-    and probability velocities across multiple symbols via saved JSONL logs.
+Probability surface methodology (per user spec):
+  A market such as "Bitcoin above $X on March 20?" gives a single point on
+  the survival function S(x) = P(price > x).  With multiple strikes at the
+  same expiry, the full distribution can be inferred.
 
-Public API (no API key required):
-  Gamma API : https://gamma-api.polymarket.com/markets
-  CLOB API  : https://clob.polymarket.com/book?token_id={token_id}
+  Critical filters applied before any surface construction:
+  • INFORMATIVE RANGE ONLY: only include surface points where the YES
+    probability is strictly inside [SURFACE_MIN, SURFACE_MAX] = [3%, 97%].
+    Near-certain outcomes (e.g. "above $62k" at 100% when BTC = $84k, or
+    "above $90k" at 0.5%) add no distributional information and distort
+    interpolation at the tails.  Only the "live" strikes where the market
+    is actually pricing uncertainty contribute to the surface.
+  • GROUPED BY RESOLUTION DATE: markets for the same expiry date form a
+    coherent implied forward distribution.  Mixing "by March 20" with "by
+    March 25" conflates different term horizons.  Each date gets its own
+    surface, quantile table, and lognormal IV.
+  • OB DEPTH WEIGHTING: when fitting lognormal IV, each surface point is
+    weighted by its total order-book depth (sum of top-5 bid+ask USDC
+    notional).  Deep, liquid markets constrain the fit more than thin ones.
+  • FIRST-TO-HIT MARKETS: "Will Bitcoin hit $60k or $80k first?" markets
+    are parsed as directional signals with implied downside/upside skew.
+    When the current price lies between the two levels, approximate survival
+    function points are also derived and added to the surface.
+
+Other features (from v3):
+  • Tighter time bucketing (intraday/overnight/short/weekly/medium)
+  • Probability velocity from signals.jsonl
+  • OB conviction (bid-ask spread) as aggregate weight multiplier
+  • Urgency × conviction weighted directional aggregate
+  • Price level magnets (cluster analysis)
+  • Consensus breadth score
+  • Cross-asset coherence function
+
+Public API (no key required):
+  Gamma : https://gamma-api.polymarket.com/markets
+  CLOB  : https://clob.polymarket.com/book?token_id={token_id}
 """
 
 from __future__ import annotations
@@ -53,27 +66,25 @@ _TIMEOUT = 15
 _CATEGORIES = ["Crypto", "Finance", "Economy", "Trending"]
 
 # ── Time bucket definitions ───────────────────────────────────────────────────
-_BUCKET_INTRADAY  = "intraday"   # <= 6h
-_BUCKET_OVERNIGHT = "overnight"  # 6-24h
-_BUCKET_SHORT     = "short"      # 1-3d
-_BUCKET_WEEKLY    = "weekly"     # 3-7d
-_BUCKET_MEDIUM    = "medium"     # 7-30d
+_BUCKET_INTRADAY  = "intraday"
+_BUCKET_OVERNIGHT = "overnight"
+_BUCKET_SHORT     = "short"
+_BUCKET_WEEKLY    = "weekly"
+_BUCKET_MEDIUM    = "medium"
 
 _BUCKET_ORDER = [_BUCKET_INTRADAY, _BUCKET_OVERNIGHT,
                  _BUCKET_SHORT, _BUCKET_WEEKLY, _BUCKET_MEDIUM]
 
-# Representative horizon (days) used for lognormal IV per bucket
-_BUCKET_HORIZON_DAYS: Dict[str, float] = {
-    _BUCKET_INTRADAY:  0.25,
-    _BUCKET_OVERNIGHT: 0.5,
-    _BUCKET_SHORT:     2.0,
-    _BUCKET_WEEKLY:    5.0,
-    _BUCKET_MEDIUM:    15.0,
-}
-
-_SHORT_TERM_DAYS = 30       # overall market inclusion cutoff
+_SHORT_TERM_DAYS = 30
 _NEUTRAL_BAND    = (0.35, 0.65)
-_MIN_VELOCITY_PH = 0.03     # flag velocity if |change| >= 3%/hour
+_MIN_VELOCITY_PH = 0.03
+
+# ── Probability surface informative range ─────────────────────────────────────
+# Only strikes where the YES probability is inside this band contribute to the
+# survival function.  Near-certain outcomes are excluded.
+_SURFACE_MIN_PROB = 0.03
+_SURFACE_MAX_PROB = 0.97
+
 
 # ── Symbol → search terms ─────────────────────────────────────────────────────
 _SYMBOL_TERMS: Dict[str, List[str]] = {
@@ -115,6 +126,36 @@ _BEARISH_WORDS = [
     "recession", "rate hike", "hawkish", "tightening", "bankruptcy",
 ]
 
+# ── Resolution date parsing ───────────────────────────────────────────────────
+_MONTH_MAP: Dict[str, int] = {
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+    "january": 1, "february": 2, "march": 3, "april": 4,
+    "june": 6, "july": 7, "august": 8, "september": 9,
+    "october": 10, "november": 11, "december": 12,
+}
+
+# "on March 20", "by March 20th", "before April 1"
+_RES_DATE_NAMED = re.compile(
+    r'(?:on|by|before|end of)\s+'
+    r'(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|'
+    r'jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)'
+    r'\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(\d{4}))?',
+    re.I,
+)
+# "on 3/20" or "by 3/20/2026"
+_RES_DATE_NUMERIC = re.compile(
+    r'(?:on|by|before)\s+(\d{1,2})[/\-](\d{1,2})(?:[/\-](\d{2,4}))?',
+    re.I,
+)
+
+# ── First-to-hit market parsing ───────────────────────────────────────────────
+# e.g. "Will Bitcoin hit $60k or $80k first?"
+_FIRST_HIT_RE = re.compile(
+    r'(?:hit|reach|touch)\s+\$?([\d,]+\.?\d*\s*[kK]?)\s+or\s+\$?([\d,]+\.?\d*\s*[kK]?)\s+first',
+    re.I,
+)
+
 
 # ── Basic helpers ─────────────────────────────────────────────────────────────
 
@@ -128,7 +169,6 @@ def _get(url: str, params: dict = None) -> Optional[dict]:
 
 
 def _days_to_expiry(end_date_str: str) -> int:
-    """Integer days to expiry (kept for backward compat)."""
     if not end_date_str:
         return 9999
     try:
@@ -139,7 +179,6 @@ def _days_to_expiry(end_date_str: str) -> int:
 
 
 def _hours_to_expiry(end_date_str: str) -> float:
-    """Float hours to expiry — finer resolution than _days_to_expiry."""
     if not end_date_str:
         return float("inf")
     try:
@@ -151,25 +190,124 @@ def _hours_to_expiry(end_date_str: str) -> float:
 
 
 def _classify_bucket(hours: float) -> str:
-    if hours <= 6:        return _BUCKET_INTRADAY
-    if hours <= 24:       return _BUCKET_OVERNIGHT
-    if hours <= 72:       return _BUCKET_SHORT
-    if hours <= 168:      return _BUCKET_WEEKLY
+    if hours <= 6:   return _BUCKET_INTRADAY
+    if hours <= 24:  return _BUCKET_OVERNIGHT
+    if hours <= 72:  return _BUCKET_SHORT
+    if hours <= 168: return _BUCKET_WEEKLY
     return _BUCKET_MEDIUM
 
 
 def _urgency(hours: float) -> float:
-    """Weight inversely proportional to hours-to-expiry; floor at 0.5h."""
     return 1.0 / max(hours, 0.5)
 
 
 def _parse_time_horizon(hours: float) -> str:
-    if hours <= 0:    return "expired"
-    if hours <= 6:    return f"{hours:.1f}h"
-    if hours <= 24:   return f"{hours:.0f}h"
-    if hours <= 168:  return f"{hours/24:.1f}d"
-    if hours <= 720:  return f"{hours/168:.1f}w"
+    if hours <= 0:   return "expired"
+    if hours <= 6:   return f"{hours:.1f}h"
+    if hours <= 24:  return f"{hours:.0f}h"
+    if hours <= 168: return f"{hours/24:.1f}d"
+    if hours <= 720: return f"{hours/168:.1f}w"
     return f"{hours/720:.1f}mo"
+
+
+def _parse_resolution_date(question: str, end_date_str: str = "") -> Optional[str]:
+    """
+    Extract a specific resolution date from the market question string.
+    Returns "YYYY-MM-DD" or None (fall back to end_date_str from API).
+    """
+    q = question.lower()
+    now_year = datetime.now(timezone.utc).year
+
+    m = _RES_DATE_NAMED.search(q)
+    if m:
+        month_str, day_str, year_str = m.group(1), m.group(2), m.group(3)
+        month = _MONTH_MAP.get(month_str.lower().rstrip("."))
+        if month:
+            try:
+                day  = int(day_str)
+                year = int(year_str) if year_str else now_year
+                if year < 100:
+                    year += 2000
+                return datetime(year, month, day).strftime("%Y-%m-%d")
+            except ValueError:
+                pass
+
+    m = _RES_DATE_NUMERIC.search(q)
+    if m:
+        try:
+            mo, da = int(m.group(1)), int(m.group(2))
+            yr = int(m.group(3)) if m.group(3) else now_year
+            if yr < 100:
+                yr += 2000
+            return datetime(yr, mo, da).strftime("%Y-%m-%d")
+        except (ValueError, TypeError):
+            pass
+
+    # Fall back to API end date
+    if end_date_str:
+        try:
+            dt = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
+            return dt.strftime("%Y-%m-%d")
+        except Exception:
+            pass
+    return None
+
+
+def _parse_k(s: str) -> Optional[float]:
+    """Parse price string like '80k', '80,000', '80000' → float."""
+    s = s.strip().replace(",", "")
+    try:
+        if s.lower().endswith("k"):
+            return float(s[:-1]) * 1000
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _parse_first_to_hit(
+    question: str, yes_prob: float, current_price: Optional[float]
+) -> Optional[dict]:
+    """
+    Parse "Will X hit $A or $B first?" markets.
+    Returns a dict describing the two levels and the implied signal,
+    or None if the question doesn't match.
+
+    If current_price lies between A and B, also returns approximate
+    survival function points using the linear approximation:
+      S(A) ≈ 1 - yes_prob   (probability price will go that low before recovering)
+      S(B) ≈ yes_prob        (... before going that high)
+    These are APPROXIMATE — useful for directionality, not precise distribution.
+    """
+    m = _FIRST_HIT_RE.search(question)
+    if not m:
+        return None
+    price_a = _parse_k(m.group(1))
+    price_b = _parse_k(m.group(2))
+    if price_a is None or price_b is None:
+        return None
+
+    lo, hi = (price_a, price_b) if price_a < price_b else (price_b, price_a)
+    # YES = P(price_a hit first); determine which is lower
+    p_lo_first = yes_prob if price_a < price_b else (1.0 - yes_prob)
+
+    signal = "bearish" if p_lo_first > 0.5 else "bullish"
+
+    surface_pts: List[Tuple[float, float]] = []
+    if current_price and lo < current_price < hi:
+        # Only add if in the informative range
+        surv_lo = 1.0 - p_lo_first   # P(price > lo) ≈ 1 - P(lo hit first)
+        surv_hi = p_lo_first          # P(price > hi) ≈ P(lo hit first) → rough approx
+        if _SURFACE_MIN_PROB <= surv_lo <= _SURFACE_MAX_PROB:
+            surface_pts.append((lo, surv_lo))
+        if _SURFACE_MIN_PROB <= surv_hi <= _SURFACE_MAX_PROB:
+            surface_pts.append((hi, surv_hi))
+
+    return {
+        "lo": lo, "hi": hi,
+        "p_lo_first": round(p_lo_first, 3),
+        "signal": signal,
+        "surface_pts": surface_pts,
+    }
 
 
 def _compute_relevance(question: str, symbol: str) -> float:
@@ -235,12 +373,7 @@ def _fetch_order_book(token_id: str) -> Optional[dict]:
 
 
 def _ob_conviction(ob: Optional[dict]) -> float:
-    """
-    OB-derived conviction score in [0.1, 1.0].
-    Tight spread -> near 1.0 (confident market).
-    Wide spread  -> near 0.1 (uncertain, down-weight).
-    Returns 1.0 when no OB data (neutral — don't penalise).
-    """
+    """Conviction score [0.1, 1.0] from bid-ask spread fraction."""
     if not ob:
         return 1.0
     bid = ob.get("weighted_bid") or 0.0
@@ -250,6 +383,22 @@ def _ob_conviction(ob: Optional[dict]) -> float:
     mid         = (bid + ask) / 2.0
     spread_frac = (ask - bid) / max(mid, 1e-6)
     return max(0.1, round(1.0 - min(spread_frac, 0.9), 3))
+
+
+def _ob_depth(ob: Optional[dict]) -> float:
+    """
+    Total USDC-denominated notional across the top 5 bid + ask levels.
+    Used as a weight for IV fitting: deeper markets constrain the fit more.
+    """
+    if not ob:
+        return 0.0
+    total = 0.0
+    for side in ["bids", "asks"]:
+        for level in (ob.get(side) or [])[:5]:
+            price = float(level.get("price", 0) or 0)
+            size  = float(level.get("size",  0) or 0)
+            total += price * size
+    return total
 
 
 # ── Probability surface helpers ───────────────────────────────────────────────
@@ -321,6 +470,7 @@ def _interpolate_quantile(prices: List[float], survivals: List[float],
 
 
 def _build_price_ranges(price_points: List[Tuple[float, float]]) -> Optional[dict]:
+    """Build quantile table from (price, survival_prob) pairs."""
     if len(price_points) < 2:
         return None
     pts    = sorted(price_points, key=lambda x: x[0])
@@ -337,8 +487,8 @@ def _build_price_ranges(price_points: List[Tuple[float, float]]) -> Optional[dic
         return None
     return {
         **q,
-        "p50_range":     [q.get("q25"), q.get("q75")],
-        "p90_range":     [q.get("q10"), q.get("q90")],
+        "p50_range":      [q.get("q25"), q.get("q75")],
+        "p90_range":      [q.get("q10"), q.get("q90")],
         "surface_points": pts,
     }
 
@@ -362,10 +512,6 @@ def _price_position_signal(current: float, ranges: dict) -> str:
 def _load_prev_snapshot(
     cache_dir: str, symbol: str
 ) -> Tuple[Optional[datetime], Dict[str, float]]:
-    """
-    Load the most recent previous per-market probability snapshot from
-    signals.jsonl.  Returns (timestamp, {question: yes_prob}) or (None, {}).
-    """
     path = Path(cache_dir) / symbol.upper() / "signals.jsonl"
     if not path.exists():
         return None, {}
@@ -373,13 +519,13 @@ def _load_prev_snapshot(
         lines = path.read_text(encoding="utf-8").strip().split("\n")
         for raw in reversed(lines):
             try:
-                data = json.loads(raw)
+                data  = json.loads(raw)
                 snaps = data.get("market_snapshots", [])
                 if not snaps:
                     continue
                 ts_str = data.get("ts", "")
-                ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00")) if ts_str else None
-                probs = {s["question"]: s["yes_prob"] for s in snaps if "question" in s}
+                ts     = datetime.fromisoformat(ts_str.replace("Z", "+00:00")) if ts_str else None
+                probs  = {s["question"]: s["yes_prob"] for s in snaps if "question" in s}
                 if probs:
                     return ts, probs
             except Exception:
@@ -394,10 +540,6 @@ def _compute_velocity(
     prev_probs: Dict[str, float],
     current_entries: List[dict],
 ) -> Dict[str, float]:
-    """
-    Compute per-market probability velocity (change per hour).
-    Only returns entries where |velocity| >= _MIN_VELOCITY_PH.
-    """
     if not prev_ts or not prev_probs:
         return {}
     elapsed = (datetime.now(timezone.utc) - prev_ts).total_seconds() / 3600.0
@@ -405,7 +547,7 @@ def _compute_velocity(
         return {}
     result = {}
     for e in current_entries:
-        q = e["question"]
+        q      = e["question"]
         prev_p = prev_probs.get(q)
         if prev_p is None:
             continue
@@ -419,21 +561,16 @@ def _price_level_magnets(
     price_surface_pts: List[Tuple[float, float]],
     current_price: Optional[float] = None,
 ) -> List[dict]:
-    """
-    Cluster market price-strike levels into ~1% bins.
-    Bins with >= 2 market references are crowd support/resistance magnets.
-    Returns list of {level, count, avg_survival, label} sorted by count desc.
-    """
+    """Cluster price-strike levels into ~1% bins to find crowd anchor levels."""
     if len(price_surface_pts) < 2:
         return []
     prices = [p[0] for p in price_surface_pts]
     median_price = float(np.median(prices))
     if median_price <= 0:
         return []
-    # Auto bucket size: ~1% of median, rounded to a nice number
-    raw  = median_price * 0.01
-    mag  = 10 ** int(np.log10(max(raw, 1.0)))
-    bsz  = max(round(raw / mag) * mag, 1.0)
+    raw = median_price * 0.01
+    mag = 10 ** int(np.log10(max(raw, 1.0)))
+    bsz = max(round(raw / mag) * mag, 1.0)
 
     buckets: Dict[float, dict] = {}
     for price, surv in price_surface_pts:
@@ -447,10 +584,9 @@ def _price_level_magnets(
     for level, v in buckets.items():
         avg_s = float(np.mean(v["survivals"]))
         label = ""
-        if v["count"] >= 2:
-            if current_price:
-                pct_away = (level - current_price) / current_price * 100
-                label = f"{pct_away:+.1f}% from spot"
+        if v["count"] >= 2 and current_price:
+            pct_away = (level - current_price) / current_price * 100
+            label = f"{pct_away:+.1f}% from spot"
         result.append({
             "level":        level,
             "count":        v["count"],
@@ -461,25 +597,16 @@ def _price_level_magnets(
     return result
 
 
-def _consensus_breadth(
-    all_enriched: List[dict],
-    directional: List[dict],
-) -> dict:
-    """
-    Compute consensus breadth:
-      non_neutral_pct   fraction of markets outside the neutral band
-      bull_breadth      fraction of non-neutral markets pointing bullish
-      conviction        "strong" | "moderate" | "mixed" | "absent"
-    """
+def _consensus_breadth(all_enriched: List[dict], directional: List[dict]) -> dict:
     total = len(all_enriched)
     if total == 0:
         return {"total": 0, "non_neutral_count": 0, "non_neutral_pct": 0.0,
                 "bull_count": 0, "bear_count": 0, "bull_breadth": 0.5,
                 "conviction": "absent"}
-    nn       = [e for e in all_enriched if _is_nonneutral(e["yes_prob"])]
-    bull_nn  = [e for e in nn if e["signal"] == "bullish"]
-    bear_nn  = [e for e in nn if e["signal"] == "bearish"]
-    nn_pct   = len(nn) / total
+    nn      = [e for e in all_enriched if _is_nonneutral(e["yes_prob"])]
+    bull_nn = [e for e in nn if e["signal"] == "bullish"]
+    bear_nn = [e for e in nn if e["signal"] == "bearish"]
+    nn_pct  = len(nn) / total
     bull_brd = len(bull_nn) / len(nn) if nn else 0.5
 
     if nn_pct < 0.25:
@@ -492,13 +619,13 @@ def _consensus_breadth(
         conv = "mixed"
 
     return {
-        "total":            total,
+        "total":             total,
         "non_neutral_count": len(nn),
-        "non_neutral_pct":  round(nn_pct, 3),
-        "bull_count":       len(bull_nn),
-        "bear_count":       len(bear_nn),
-        "bull_breadth":     round(bull_brd, 3),
-        "conviction":       conv,
+        "non_neutral_pct":   round(nn_pct, 3),
+        "bull_count":        len(bull_nn),
+        "bear_count":        len(bear_nn),
+        "bull_breadth":      round(bull_brd, 3),
+        "conviction":        conv,
     }
 
 
@@ -506,18 +633,30 @@ def _fit_lognormal_iv(
     pts: List[Tuple[float, float]],
     S0: float,
     horizon_days: float,
+    depths: Optional[List[float]] = None,
 ) -> Optional[float]:
     """
     Fit annualised lognormal implied volatility to (price, survival_prob) pairs.
+
     Model: S(x) = 1 - Phi[ (ln(x/S0) + 0.5*sigma^2*T) / (sigma*sqrt(T)) ]
-    where T = horizon_days / 365.
-    Returns annualised sigma or None on failure.
+
+    When depths are provided, each point is weighted by sqrt(depth/max_depth)
+    so that liquid markets (deep OB) constrain the fit more than thin ones.
     """
     if not _SCIPY_IV or len(pts) < 3 or S0 <= 0 or horizon_days <= 0:
         return None
-    T = horizon_days / 365.0
+    T         = horizon_days / 365.0
     prices    = np.array([p[0] for p in pts], dtype=float)
     survivals = np.clip([p[1] for p in pts], 0.02, 0.98)
+
+    # Depth-derived sigma (measurement uncertainty): shallower = higher uncertainty
+    sigma_w = None
+    if depths and len(depths) == len(pts):
+        max_d = max(depths) or 1.0
+        # sigma[i] proportional to 1/sqrt(depth_i/max_d) — deeper = tighter constraint
+        raw_w = np.array([max(d, 1.0) / max_d for d in depths])
+        sigma_w = 1.0 / np.sqrt(np.clip(raw_w, 1e-3, 1.0))
+        sigma_w = (sigma_w / sigma_w.mean()).tolist()  # normalise
 
     def model(x, sigma):
         if sigma <= 1e-4:
@@ -527,9 +666,10 @@ def _fit_lognormal_iv(
         return 1.0 - _sp_norm.cdf(z)
 
     try:
+        kwargs = {"sigma": sigma_w, "absolute_sigma": True} if sigma_w is not None else {}
         popt, _ = _sp_curve_fit(
             model, prices, survivals, p0=[0.6],
-            bounds=(0.01, 10.0), maxfev=2000,
+            bounds=(0.01, 10.0), maxfev=2000, **kwargs
         )
         sigma = float(popt[0])
         return round(sigma, 4) if 0.01 <= sigma <= 10.0 else None
@@ -537,43 +677,78 @@ def _fit_lognormal_iv(
         return None
 
 
-def _build_multi_horizon_ladder(
+def _build_date_grouped_surfaces(
     all_enriched: List[dict],
     current_price: Optional[float],
 ) -> Dict[str, dict]:
     """
-    Build separate implied price ranges per time bucket from price-level markets.
-    Returns {bucket_name: {ranges..., iv, n_markets, position_signal}} for
-    buckets that have >= 2 price-level data points.
+    Build implied price-range surfaces grouped by resolution date.
+
+    Only strike-price markets within the informative probability range
+    [SURFACE_MIN_PROB, SURFACE_MAX_PROB] = [3%, 97%] are included.
+    Dates with fewer than 2 informative points are skipped.
+
+    Returns: {resolution_date: {quantiles, iv, n_markets, position_signal, ...}}
+    sorted by date ascending (nearest expiry first).
     """
-    bucket_pts: Dict[str, List[Tuple[float, float]]] = {b: [] for b in _BUCKET_ORDER}
+    # Collect (price, surv, depth) per resolution date
+    date_pts:    Dict[str, List[Tuple[float, float]]] = {}
+    date_depths: Dict[str, List[float]]               = {}
+
     for e in all_enriched:
-        pl = e.get("price_level")
-        ia = e.get("is_above")
+        pl  = e.get("price_level")
+        ia  = e.get("is_above")
+        yp  = e["yes_prob"]
         if pl is None or ia is None:
             continue
-        surv = e["yes_prob"] if ia else (1.0 - e["yes_prob"])
-        bucket_pts[e["bucket"]].append((pl, surv))
+        # CRITICAL: skip near-certain outcomes
+        if not (_SURFACE_MIN_PROB <= yp <= _SURFACE_MAX_PROB):
+            continue
+        surv     = yp if ia else (1.0 - yp)
+        res_date = e.get("resolution_date") or e["bucket"]
+        depth    = e.get("ob_depth", 0.0)
+
+        if res_date not in date_pts:
+            date_pts[res_date]    = []
+            date_depths[res_date] = []
+        date_pts[res_date].append((pl, surv))
+        date_depths[res_date].append(depth)
 
     result = {}
-    for bname in _BUCKET_ORDER:
-        pts = bucket_pts[bname]
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    for rdate in sorted(date_pts.keys()):
+        pts    = date_pts[rdate]
+        depths = date_depths[rdate]
         if len(pts) < 2:
             continue
         ranges = _build_price_ranges(pts)
         if not ranges:
             continue
-        horizon_d = _BUCKET_HORIZON_DAYS[bname]
+
+        # Compute horizon in fractional days
+        horizon_days = None
+        try:
+            rd = datetime.strptime(rdate, "%Y-%m-%d")
+            diff = (rd - now).total_seconds() / 86400.0
+            horizon_days = max(0.1, diff)
+        except Exception:
+            pass
+
         iv = None
         pos_sig = None
         if current_price and current_price > 0:
-            iv      = _fit_lognormal_iv(pts, current_price, horizon_d)
+            iv      = _fit_lognormal_iv(pts, current_price,
+                                        horizon_days or 7.0, depths)
             pos_sig = _price_position_signal(current_price, ranges)
-        result[bname] = {
+
+        result[rdate] = {
             **ranges,
             "iv":              iv,
             "n_markets":       len(pts),
+            "n_informative":   len(pts),   # explicit: these are all filtered
             "position_signal": pos_sig,
+            "horizon_days":    horizon_days,
         }
     return result
 
@@ -590,63 +765,47 @@ def _save_price_levels(cache_dir: str, symbol: str, data: dict):
 
 def read_price_levels_cache(symbol: str, cache_dir: str) -> str:
     """
-    Read the latest cached price-levels data and return a compact string
-    suitable for injection into agent prompts.
-    Includes multi-horizon ladder and breadth data if available.
+    Return a compact prompt-injectable string from the latest cached snapshot.
+    Shows per-date probability surfaces if available.
     """
     path = Path(cache_dir) / symbol.upper() / "price_levels.json"
     if not path.exists():
         return ""
     try:
         d = json.loads(path.read_text(encoding="utf-8"))
-        if d.get("no_directional_signal") and not d.get("ranges"):
+        if d.get("no_directional_signal") and not d.get("date_surfaces"):
             return (f"NA — no non-neutral Polymarket markets found for "
                     f"{symbol.upper()} on {d.get('date', '')}.")
         lines = [f"Polymarket Price Ranges for {symbol.upper()} ({d.get('date', '')})"]
 
-        # Multi-horizon ladder first (if available)
-        ladder = d.get("multi_horizon_ladder", {})
-        if ladder:
-            lines.append("  Probability Ladder:")
-            for bname in _BUCKET_ORDER:
-                bl = ladder.get(bname)
-                if not bl:
-                    continue
+        # Date-grouped surfaces (primary output)
+        date_surfs = d.get("date_surfaces", {})
+        if date_surfs:
+            lines.append("  Per-Date Probability Surfaces (informative range only):")
+            for rdate, bl in sorted(date_surfs.items()):
                 q50  = bl.get("q50")
                 p50  = bl.get("p50_range", [None, None])
                 iv   = bl.get("iv")
                 pos  = bl.get("position_signal", "")
-                iv_s = f"  IV={iv:.0%}" if iv else ""
+                nm   = bl.get("n_informative", 0)
                 q50_s = f"${q50:,.0f}" if q50 else "N/A"
                 ci_s  = (f"${p50[0]:,.0f}-${p50[1]:,.0f}"
                          if p50[0] and p50[1] else "N/A")
-                lines.append(f"    [{bname}] P50={q50_s}  50%CI=[{ci_s}]{iv_s}  {pos}")
-        else:
-            # Fall back to single-range display
-            r = d.get("ranges", {})
-            if r.get("q50"):
-                lines.append(f"  Median expected: ${r['q50']:,.0f}")
-            p50 = r.get("p50_range", [None, None])
-            p90 = r.get("p90_range", [None, None])
-            if p50[0] and p50[1]:
-                lines.append(f"  50% CI: ${p50[0]:,.0f} - ${p50[1]:,.0f}")
-            if p90[0] and p90[1]:
-                lines.append(f"  90% CI: ${p90[0]:,.0f} - ${p90[1]:,.0f}")
+                iv_s  = f"  IV={iv:.0%}" if iv else ""
+                pos_s = pos.split(" —")[0][:25] if pos else ""
+                lines.append(
+                    f"    [{rdate}] P50={q50_s}  50%CI=[{ci_s}]{iv_s}  "
+                    f"{nm} markets  {pos_s}"
+                )
 
         if d.get("current_price"):
-            lines.append(f"  Current price: ${d['current_price']:,.2f}")
-        if d.get("position_signal"):
-            lines.append(f"  Signal vs range: {d['position_signal']}")
-
+            lines.append(f"  Spot: ${d['current_price']:,.2f}")
         bp = d.get("bull_probability")
         if bp is not None:
-            lines.append(f"  Overall bull probability: {bp:.0%}")
-
+            lines.append(f"  Directional bias: Bull {bp:.0%} / Bear {1-bp:.0%}")
         brd = d.get("breadth", {})
         if brd.get("conviction"):
-            lines.append(f"  Conviction: {brd['conviction']}  "
-                         f"({brd.get('non_neutral_count', 0)}/{brd.get('total', 0)} "
-                         f"markets non-neutral)")
+            lines.append(f"  Conviction: {brd['conviction']}")
         return "\n".join(lines)
     except Exception:
         return ""
@@ -661,12 +820,12 @@ def get_polymarket_sentiment(
     current_price: Optional[float] = None,
 ) -> str:
     """
-    Fetch live Polymarket markets, compute urgency x conviction weighted
-    directional bias, probability velocity, multi-horizon price ladder,
-    price level magnets, consensus breadth, and lognormal implied volatility.
-
-    Caches structured data (price_levels.json, signals.jsonl) for downstream
-    agents via read_price_levels_cache().
+    Fetch Polymarket markets and build an implied probability surface using
+    only informative outcomes (3%–97% YES probability).  Markets are grouped
+    by their resolution date to produce per-expiry price range tables with
+    lognormal implied volatility.  First-to-hit markets are parsed for
+    directional skew.  All other v3 features (velocity, conviction, breadth)
+    are preserved.
     """
     symbol_upper = symbol.upper()
 
@@ -698,21 +857,21 @@ def get_polymarket_sentiment(
         score = _compute_relevance(q, symbol_upper)
         if score < 0.5:
             continue
-        end_str     = m.get("endDate") or m.get("end_date", "")
-        hours       = _hours_to_expiry(end_str)
-        days        = hours / 24.0
+        end_str = m.get("endDate") or m.get("end_date", "")
+        hours   = _hours_to_expiry(end_str)
+        days    = hours / 24.0
         if days > _SHORT_TERM_DAYS:
             continue
         m["_relevance"] = score
         m["_hours"]     = hours
         m["_bucket"]    = _classify_bucket(hours)
+        m["_end_str"]   = end_str
         scored.append(m)
 
     if not scored:
         return (f"NA — no live Polymarket markets with a clear causal relationship to "
                 f"{symbol_upper} were found across Crypto / Finance / Economy / Trending.")
 
-    # Sort: highest urgency first, then by relevance, then by volume
     scored.sort(key=lambda m: (
         -_urgency(m["_hours"]),
         -m["_relevance"],
@@ -722,18 +881,21 @@ def get_polymarket_sentiment(
     # ── 3. Load previous snapshot for velocity ────────────────────────────────
     prev_ts, prev_probs = _load_prev_snapshot(cache_dir, symbol_upper)
 
-    # ── 4. Enrich markets with OB + conviction ────────────────────────────────
-    all_enriched:      List[dict]               = []
-    price_surface_pts: List[Tuple[float, float]] = []   # global surface (all buckets)
-    directional:       List[dict]               = []
+    # ── 4. Enrich markets ─────────────────────────────────────────────────────
+    all_enriched:       List[dict]               = []
+    # Global surface uses only informative-range points
+    price_surface_pts:  List[Tuple[float, float]] = []
+    directional:        List[dict]               = []
+    first_to_hit_list:  List[dict]               = []
 
     for m in scored[:25]:
         tokens         = m.get("tokens") or []
         outcome_prices = m.get("outcomePrices") or []
         hours          = m["_hours"]
         bucket         = m["_bucket"]
+        end_str        = m["_end_str"]
 
-        # Get YES probability
+        # Resolve YES probability
         yes_prob     = None
         yes_token_id = None
         for i, tok in enumerate(tokens):
@@ -752,16 +914,18 @@ def get_polymarket_sentiment(
                 yes_prob = 0.5
         yes_prob = yes_prob if yes_prob is not None else 0.5
 
-        # OB enrichment + conviction score
+        # OB enrichment
         ob          = None
         ob_mid      = None
         conviction  = 1.0
+        depth_val   = 0.0
         if yes_token_id:
             ob = _fetch_order_book(yes_token_id)
             if ob and ob.get("weighted_bid") and ob.get("weighted_ask"):
                 ob_mid   = round((ob["weighted_bid"] + ob["weighted_ask"]) / 2, 4)
                 yes_prob = ob_mid
             conviction = _ob_conviction(ob)
+            depth_val  = _ob_depth(ob)
             time.sleep(0.05)
 
         q              = m.get("question", "")
@@ -771,42 +935,59 @@ def get_polymarket_sentiment(
         price_lvl      = _extract_price_level(q)
         is_above       = _is_above_market(q)
         horizon_str    = _parse_time_horizon(hours)
+        res_date       = _parse_resolution_date(q, end_str)
 
         entry = {
-            "question":    q,
-            "yes_prob":    round(yes_prob, 3),
-            "signal":      signal,
-            "bull_prob":   round(bull_p, 3),
-            "volume":      volume,
-            "hours":       hours,
-            "bucket":      bucket,
-            "horizon":     horizon_str,
-            "end_date":    m.get("endDate") or m.get("end_date", ""),
-            "ob_mid":      ob_mid,
-            "conviction":  conviction,
-            "urgency":     urgency_val,
-            "price_level": price_lvl,
-            "is_above":    is_above,
-            "relevance":   m["_relevance"],
+            "question":        q,
+            "yes_prob":        round(yes_prob, 3),
+            "signal":          signal,
+            "bull_prob":       round(bull_p, 3),
+            "volume":          volume,
+            "hours":           hours,
+            "bucket":          bucket,
+            "horizon":         horizon_str,
+            "end_date":        end_str,
+            "ob_mid":          ob_mid,
+            "conviction":      conviction,
+            "urgency":         urgency_val,
+            "price_level":     price_lvl,
+            "is_above":        is_above,
+            "resolution_date": res_date,
+            "ob_depth":        depth_val,
+            "relevance":       m["_relevance"],
         }
         all_enriched.append(entry)
 
-        # Global probability surface
+        # ── Global surface: INFORMATIVE RANGE ONLY ────────────────────────────
         if price_lvl is not None and is_above is not None:
-            surv = yes_prob if is_above else (1.0 - yes_prob)
-            price_surface_pts.append((price_lvl, surv))
+            if _SURFACE_MIN_PROB <= yes_prob <= _SURFACE_MAX_PROB:
+                surv = yes_prob if is_above else (1.0 - yes_prob)
+                price_surface_pts.append((price_lvl, surv))
 
-        # Directional filter: non-neutral
+        # ── First-to-hit markets ───────────────────────────────────────────────
+        fth = _parse_first_to_hit(q, yes_prob, current_price)
+        if fth:
+            first_to_hit_list.append({"question": q[:80], **fth, "volume": volume})
+            # Add approximate surface points if current price is between levels
+            for sp in fth["surface_pts"]:
+                price_surface_pts.append(sp)
+
+        # Directional filter
         if _is_nonneutral(yes_prob):
             directional.append(entry)
 
     # ── 5. Probability velocity ───────────────────────────────────────────────
     velocity_map = _compute_velocity(prev_ts, prev_probs, all_enriched)
 
-    # ── 6. Multi-horizon probability ladder ───────────────────────────────────
-    multi_ladder = _build_multi_horizon_ladder(all_enriched, current_price)
+    # ── 6. Per-date probability surfaces ─────────────────────────────────────
+    date_surfaces = _build_date_grouped_surfaces(all_enriched, current_price)
+    # Inject first-to-hit approximate surface points for dates we found
+    for fth in first_to_hit_list:
+        for sp in fth.get("surface_pts", []):
+            # Assign to their resolution date if known
+            pass   # already added to price_surface_pts above
 
-    # ── 7. Urgency x conviction weighted aggregate ────────────────────────────
+    # ── 7. Urgency × conviction weighted aggregate ────────────────────────────
     no_directional_signal = False
     if directional:
         total_eff = sum(
@@ -826,8 +1007,8 @@ def get_polymarket_sentiment(
     # ── 8. Consensus breadth ──────────────────────────────────────────────────
     breadth = _consensus_breadth(all_enriched, directional)
 
-    # ── 9. Global price ranges (from all buckets combined) ────────────────────
-    global_ranges = _build_price_ranges(price_surface_pts) if price_surface_pts else None
+    # ── 9. Global ranges (union of all informative surface points) ─────────────
+    global_ranges   = _build_price_ranges(price_surface_pts) if price_surface_pts else None
     position_signal = None
     if global_ranges and current_price and current_price > 0:
         position_signal = _price_position_signal(current_price, global_ranges)
@@ -835,24 +1016,25 @@ def get_polymarket_sentiment(
     # ── 10. Price level magnets ────────────────────────────────────────────────
     magnets = _price_level_magnets(price_surface_pts, current_price)
 
-    # ── 11. Save enhanced JSONL cache ─────────────────────────────────────────
+    # ── 11. Save cache ────────────────────────────────────────────────────────
     cache_data = {
-        "symbol":              symbol_upper,
-        "date":                curr_date,
-        "ts":                  datetime.now(timezone.utc).isoformat(),
-        "current_price":       current_price,
-        "bull_probability":    agg_bull_p,
-        "bear_probability":    agg_bear_p,
+        "symbol":               symbol_upper,
+        "date":                 curr_date,
+        "ts":                   datetime.now(timezone.utc).isoformat(),
+        "current_price":        current_price,
+        "bull_probability":     agg_bull_p,
+        "bear_probability":     agg_bear_p,
         "no_directional_signal": no_directional_signal,
-        "position_signal":     position_signal,
-        "ranges":              global_ranges or {},
-        "multi_horizon_ladder": multi_ladder,
-        "breadth":             breadth,
-        "magnets":             magnets,
-        "surface_points":      [{"price": p, "survival": s}
-                                 for p, s in sorted(price_surface_pts)],
-        "directional_markets": len(directional),
-        "market_snapshots":    [
+        "position_signal":      position_signal,
+        "ranges":               global_ranges or {},
+        "date_surfaces":        date_surfaces,
+        "breadth":              breadth,
+        "magnets":              magnets,
+        "surface_points":       [{"price": p, "survival": s}
+                                  for p, s in sorted(price_surface_pts)],
+        "surface_filter":       f"[{_SURFACE_MIN_PROB:.0%}, {_SURFACE_MAX_PROB:.0%}]",
+        "directional_markets":  len(directional),
+        "market_snapshots":     [
             {"question": e["question"], "yes_prob": e["yes_prob"],
              "bucket": e["bucket"], "hours": e["hours"]}
             for e in all_enriched
@@ -868,7 +1050,7 @@ def get_polymarket_sentiment(
     if no_directional_signal:
         bias_line = (
             f"**Directional Bias:** NA — no non-neutral short-term markets found for "
-            f"{symbol_upper}; cannot derive a signal from Polymarket."
+            f"{symbol_upper}."
         )
     else:
         bias_tag = ("Bullish" if agg_bull_p > 0.55 else
@@ -878,10 +1060,10 @@ def get_polymarket_sentiment(
             f"Bull: **{agg_bull_p:.0%}**  Bear: **{agg_bear_p:.0%}**"
         )
 
-    conv_str = breadth["conviction"].upper()
+    conv_str    = breadth["conviction"].upper()
     breadth_line = (
-        f"**Consensus Breadth:** {breadth['non_neutral_count']}/{breadth['total']} markets "
-        f"non-neutral ({breadth['non_neutral_pct']:.0%})  —  "
+        f"**Consensus Breadth:** {breadth['non_neutral_count']}/{breadth['total']} "
+        f"markets non-neutral ({breadth['non_neutral_pct']:.0%})  —  "
         f"{breadth['bull_count']} bullish / {breadth['bear_count']} bearish  —  "
         f"**{conv_str}** conviction"
     )
@@ -892,7 +1074,7 @@ def get_polymarket_sentiment(
         breadth_line + "\n",
     ]
 
-    # Probability velocity section
+    # Probability velocity
     if velocity_map:
         elapsed_h = ((datetime.now(timezone.utc) - prev_ts).total_seconds() / 3600.0
                      if prev_ts else 0.0)
@@ -901,46 +1083,75 @@ def get_polymarket_sentiment(
             "| Market | Current | Change/h | Direction | Bucket |",
             "|--------|---------|----------|-----------|--------|",
         ]
-        vel_entries = sorted(velocity_map.items(), key=lambda x: -abs(x[1]))
-        for q_text, vel in vel_entries[:8]:
+        for q_text, vel in sorted(velocity_map.items(), key=lambda x: -abs(x[1]))[:8]:
             entry = next((e for e in all_enriched if e["question"] == q_text), None)
             if not entry:
                 continue
-            cur_p   = entry["yes_prob"]
-            vel_str = f"{vel:+.1%}/h"
-            dir_str = "RISING" if vel > 0 else "FALLING"
-            q_short = q_text[:60] + ("..." if len(q_text) > 60 else "")
+            q_s = q_text[:60] + ("..." if len(q_text) > 60 else "")
             lines.append(
-                f"| {q_short} | {cur_p:.0%} | {vel_str} | {dir_str} | {entry['bucket']} |"
+                f"| {q_s} | {entry['yes_prob']:.0%} | {vel:+.1%}/h | "
+                f"{'RISING' if vel > 0 else 'FALLING'} | {entry['bucket']} |"
             )
         lines.append("")
 
-    # Multi-horizon probability ladder
-    if multi_ladder:
+    # Per-date probability surfaces — the primary output
+    if date_surfaces:
+        n_filtered_out = sum(
+            1 for e in all_enriched
+            if e.get("price_level") and e.get("is_above") is not None
+            and not (_SURFACE_MIN_PROB <= e["yes_prob"] <= _SURFACE_MAX_PROB)
+        )
         lines += [
-            "\n### Multi-Horizon Probability Ladder\n",
-            "| Bucket | N | P50 | 50% CI | 90% CI | vs Spot | Ann. IV |",
-            "|--------|---|-----|--------|--------|---------|---------|",
+            f"\n### Implied Probability Surfaces — by Resolution Date\n",
+            f"*(Only informative strikes [{_SURFACE_MIN_PROB:.0%}–{_SURFACE_MAX_PROB:.0%}] "
+            f"used. {n_filtered_out} near-certain outcomes excluded.)*\n",
+            "| Expiry | N | P10 | P25 | P50 | P75 | P90 | 50% CI | vs Spot | Ann. IV |",
+            "|--------|---|-----|-----|-----|-----|-----|--------|---------|---------|",
         ]
-        for bname in _BUCKET_ORDER:
-            bl = multi_ladder.get(bname)
-            if not bl:
-                continue
-            q50   = bl.get("q50")
-            p50r  = bl.get("p50_range", [None, None])
-            p90r  = bl.get("p90_range", [None, None])
-            iv    = bl.get("iv")
-            pos   = bl.get("position_signal", "—")
-            nm    = bl.get("n_markets", 0)
-            q50_s = f"${q50:,.0f}" if q50 else "N/A"
-            ci50  = (f"${p50r[0]:,.0f}–${p50r[1]:,.0f}"
-                     if p50r[0] and p50r[1] else "N/A")
-            ci90  = (f"${p90r[0]:,.0f}–${p90r[1]:,.0f}"
-                     if p90r[0] and p90r[1] else "N/A")
-            iv_s  = f"{iv:.0%}" if iv else "N/A"
-            pos_s = pos.split(" —")[0] if pos else "—"
+        for rdate, bl in sorted(date_surfaces.items()):
+            q10  = bl.get("q10")
+            q25  = bl.get("q25")
+            q50  = bl.get("q50")
+            q75  = bl.get("q75")
+            q90  = bl.get("q90")
+            iv   = bl.get("iv")
+            pos  = bl.get("position_signal", "—")
+            nm   = bl.get("n_informative", 0)
+            def _fs(v): return f"${v:,.0f}" if v else "—"
+            ci50 = f"{_fs(q25)}–{_fs(q75)}"
+            pos_s = pos.split(" —")[0][:15] if pos else "—"
+            iv_s  = f"{iv:.0%}" if iv else "—"
             lines.append(
-                f"| {bname} | {nm} | {q50_s} | {ci50} | {ci90} | {pos_s} | {iv_s} |"
+                f"| {rdate} | {nm} | {_fs(q10)} | {_fs(q25)} | {_fs(q50)} | "
+                f"{_fs(q75)} | {_fs(q90)} | {ci50} | {pos_s} | {iv_s} |"
+            )
+        lines.append("")
+
+        # Detail table: informative surface points per date
+        lines.append("**Survival function surface (informative range only):**\n")
+        for rdate, bl in sorted(date_surfaces.items()):
+            pts = bl.get("surface_points", [])
+            if not pts:
+                continue
+            lines.append(f"*{rdate}:*")
+            lines.append("| Strike | P(price > strike) |")
+            lines.append("|--------|------------------|")
+            for price, surv in sorted(pts):
+                lines.append(f"| ${price:,.0f} | {surv:.0%} |")
+            lines.append("")
+
+    # First-to-hit markets
+    if first_to_hit_list:
+        lines += [
+            "\n### First-to-Hit Markets\n",
+            "| Question | Lo level | Hi level | P(lo first) | Signal | Vol |",
+            "|----------|----------|----------|-------------|--------|-----|",
+        ]
+        for fth in sorted(first_to_hit_list, key=lambda x: -x["volume"])[:6]:
+            vol_s = f"${fth['volume']:,.0f}" if fth["volume"] > 0 else "—"
+            lines.append(
+                f"| {fth['question']} | ${fth['lo']:,.0f} | ${fth['hi']:,.0f} | "
+                f"{fth['p_lo_first']:.0%} | {fth['signal'].upper()} | {vol_s} |"
             )
         lines.append("")
 
@@ -949,54 +1160,34 @@ def get_polymarket_sentiment(
     if hot_magnets:
         lines += [
             "\n### Price Level Magnets (multi-market references)\n",
-            "| Level | Markets referencing | Avg P(>level) | Distance from spot |",
-            "|-------|---------------------|---------------|--------------------|",
+            "| Level | Markets | Avg P(>level) | Distance |",
+            "|-------|---------|---------------|----------|",
         ]
         for mg in hot_magnets[:8]:
-            lvl_s   = f"${mg['level']:,.0f}"
-            dist_s  = mg["label"] or "—"
             lines.append(
-                f"| {lvl_s} | {mg['count']} | {mg['avg_survival']:.0%} | {dist_s} |"
+                f"| ${mg['level']:,.0f} | {mg['count']} | "
+                f"{mg['avg_survival']:.0%} | {mg['label'] or '—'} |"
             )
         lines.append("")
 
-    # Global probability surface (if available and no ladder)
-    if global_ranges and not multi_ladder:
-        q10, q25 = global_ranges.get("q10"), global_ranges.get("q25")
-        q50      = global_ranges.get("q50")
-        q75, q90 = global_ranges.get("q75"), global_ranges.get("q90")
-        lines += [
-            "\n### Implied Price Ranges (all horizons combined)\n",
-            "| Confidence | Lower | Upper | Width |",
-            "|------------|-------|-------|-------|",
-        ]
-        if q25 and q75:
-            lines.append(f"| 50% CI | ${q25:,.0f} | ${q75:,.0f} | ${q75-q25:,.0f} |")
-        if q10 and q90:
-            lines.append(f"| 90% CI | ${q10:,.0f} | ${q90:,.0f} | ${q90-q10:,.0f} |")
-        if q50:
-            lines.append(f"\n**Median expected price:** ${q50:,.0f}")
-        if current_price and position_signal:
-            lines.append(f"**Current price:** ${current_price:,.2f}  ->  **{position_signal}**\n")
-
-    # Non-neutral markets grouped by bucket
+    # Non-neutral directional markets by bucket
     if directional:
         lines.append("\n### Non-Neutral Directional Markets by Bucket\n")
+        bucket_label = {
+            _BUCKET_INTRADAY:  "intraday  (<6h)",
+            _BUCKET_OVERNIGHT: "overnight (6-24h)",
+            _BUCKET_SHORT:     "short     (1-3d)",
+            _BUCKET_WEEKLY:    "weekly    (3-7d)",
+            _BUCKET_MEDIUM:    "medium    (7-30d)",
+        }
         for bname in _BUCKET_ORDER:
-            bucket_dir = [e for e in directional if e["bucket"] == bname]
-            if not bucket_dir:
+            bd = [e for e in directional if e["bucket"] == bname]
+            if not bd:
                 continue
-            bucket_label = {
-                _BUCKET_INTRADAY:  "intraday  (<6h)",
-                _BUCKET_OVERNIGHT: "overnight (6-24h)",
-                _BUCKET_SHORT:     "short     (1-3d)",
-                _BUCKET_WEEKLY:    "weekly    (3-7d)",
-                _BUCKET_MEDIUM:    "medium    (7-30d)",
-            }[bname]
-            lines.append(f"**[{bucket_label}]**")
+            lines.append(f"**[{bucket_label[bname]}]**")
             lines.append("| Question | YES% | Signal | ETA | Vol |")
             lines.append("|----------|------|--------|-----|-----|")
-            for e in sorted(bucket_dir, key=lambda x: -x["volume"])[:6]:
+            for e in sorted(bd, key=lambda x: -x["volume"])[:6]:
                 q_s   = e["question"][:60] + ("..." if len(e["question"]) > 60 else "")
                 vol_s = f"${e['volume']:,.0f}" if e["volume"] > 0 else "—"
                 lines.append(
@@ -1008,8 +1199,10 @@ def get_polymarket_sentiment(
     lines += [
         "\n---\n",
         f"*{len(all_enriched)} markets analysed. "
-        f"Weighted by urgency x OB-conviction. "
-        f"Price ranges and velocity cached for downstream agents.*",
+        f"Probability surface built from informative range "
+        f"[{_SURFACE_MIN_PROB:.0%}–{_SURFACE_MAX_PROB:.0%}] only, "
+        f"grouped by resolution date. "
+        f"Depth-weighted lognormal IV fitted per expiry.*",
     ]
     return "\n".join(lines)
 
@@ -1022,44 +1215,34 @@ def get_cross_asset_coherence(
     cache_dir: str = "./data/polymarket_cache",
 ) -> str:
     """
-    Compare the latest Polymarket directional signals and probability velocities
-    across multiple symbols.  Uses saved signals.jsonl snapshots — no API calls.
-
-    A macro regime signal is inferred when >= 60% of symbols with non-neutral
-    readings agree on direction.  Divergence signals asset-specific moves.
-
-    Returns a formatted Markdown section for injection into agent prompts.
+    Compare latest Polymarket directional signals and probability velocities
+    across multiple symbols using saved JSONL snapshots (no live API calls).
     """
     snapshots: List[dict] = []
-
     for sym in symbols:
         path = Path(cache_dir) / sym.upper() / "signals.jsonl"
         if not path.exists():
             continue
         try:
-            lines = path.read_text(encoding="utf-8").strip().split("\n")
+            lines  = path.read_text(encoding="utf-8").strip().split("\n")
             latest = prev = None
             for raw in reversed(lines):
                 try:
-                    d = json.loads(raw)
+                    dd = json.loads(raw)
                     if latest is None:
-                        latest = d
+                        latest = dd
                     elif prev is None:
-                        prev = d
+                        prev = dd
                         break
                 except Exception:
                     continue
             if latest is None:
                 continue
-
-            # Compute velocity from last two snapshots
             vel = None
             if prev is not None:
                 try:
-                    ts_now  = datetime.fromisoformat(
-                        latest["ts"].replace("Z", "+00:00"))
-                    ts_prev = datetime.fromisoformat(
-                        prev["ts"].replace("Z", "+00:00"))
+                    ts_now  = datetime.fromisoformat(latest["ts"].replace("Z", "+00:00"))
+                    ts_prev = datetime.fromisoformat(prev["ts"].replace("Z", "+00:00"))
                     elapsed = (ts_now - ts_prev).total_seconds() / 3600.0
                     bp_now  = latest.get("bull_probability")
                     bp_prev = prev.get("bull_probability")
@@ -1067,15 +1250,14 @@ def get_cross_asset_coherence(
                         vel = round((bp_now - bp_prev) / elapsed, 4)
                 except Exception:
                     pass
-
             snapshots.append({
-                "symbol":         sym.upper(),
-                "bull_prob":      latest.get("bull_probability"),
-                "no_signal":      latest.get("no_directional_signal", True),
-                "position":       latest.get("position_signal", ""),
-                "breadth":        latest.get("breadth", {}),
-                "ts":             latest.get("ts", ""),
-                "velocity":       vel,
+                "symbol":   sym.upper(),
+                "bull_prob": latest.get("bull_probability"),
+                "no_signal": latest.get("no_directional_signal", True),
+                "position":  latest.get("position_signal", ""),
+                "breadth":   latest.get("breadth", {}),
+                "ts":        latest.get("ts", ""),
+                "velocity":  vel,
             })
         except Exception:
             continue
@@ -1084,64 +1266,49 @@ def get_cross_asset_coherence(
         return (f"NA — no Polymarket snapshots found for {', '.join(s.upper() for s in symbols)}. "
                 "Run get_polymarket_sentiment for each symbol first.")
 
-    # Classify each symbol
     bullish_syms = [s for s in snapshots
-                    if not s["no_signal"] and s["bull_prob"] is not None
-                    and s["bull_prob"] > 0.55]
+                    if not s["no_signal"] and s["bull_prob"] and s["bull_prob"] > 0.55]
     bearish_syms = [s for s in snapshots
-                    if not s["no_signal"] and s["bull_prob"] is not None
-                    and s["bull_prob"] < 0.45]
-    neutral_syms = [s for s in snapshots
-                    if s["no_signal"] or s["bull_prob"] is None
-                    or 0.45 <= s["bull_prob"] <= 0.55]
-
+                    if not s["no_signal"] and s["bull_prob"] and s["bull_prob"] < 0.45]
     n_signal = len(bullish_syms) + len(bearish_syms)
-    n_total  = len(snapshots)
 
     if n_signal == 0:
-        regime = "NEUTRAL — no directional Polymarket signal across tracked assets"
+        regime = "NEUTRAL — no directional signal across tracked assets"
     elif len(bullish_syms) >= 0.60 * n_signal:
-        regime = f"RISK-ON macro signal — {len(bullish_syms)}/{n_signal} signalling assets are BULLISH"
+        regime = f"RISK-ON — {len(bullish_syms)}/{n_signal} signalling assets BULLISH"
     elif len(bearish_syms) >= 0.60 * n_signal:
-        regime = f"RISK-OFF macro signal — {len(bearish_syms)}/{n_signal} signalling assets are BEARISH"
+        regime = f"RISK-OFF — {len(bearish_syms)}/{n_signal} signalling assets BEARISH"
     else:
         regime = (f"MIXED / IDIOSYNCRATIC — "
-                  f"{len(bullish_syms)} bullish / {len(bearish_syms)} bearish "
-                  f"across {n_signal} signalling assets")
+                  f"{len(bullish_syms)} bullish / {len(bearish_syms)} bearish")
 
-    # Velocity summary
-    rising  = [s for s in snapshots if s["velocity"] and s["velocity"] > _MIN_VELOCITY_PH]
+    rising  = [s for s in snapshots if s["velocity"] and s["velocity"] >  _MIN_VELOCITY_PH]
     falling = [s for s in snapshots if s["velocity"] and s["velocity"] < -_MIN_VELOCITY_PH]
 
     lines = [
         f"## Cross-Asset Polymarket Coherence ({curr_date})\n",
         f"**Macro Regime:** {regime}\n",
-        f"Assets tracked: {n_total}  |  With signal: {n_signal}  |  "
-        f"Bullish: {len(bullish_syms)}  Bearish: {len(bearish_syms)}  Neutral: {len(neutral_syms)}\n",
-        "\n### Per-Asset Signal Summary\n",
-        "| Symbol | Bull % | Direction | Conviction | Velocity/h | Position |",
+        f"Assets: {len(snapshots)}  |  Signal: {n_signal}  |  "
+        f"Bull: {len(bullish_syms)}  Bear: {len(bearish_syms)}\n",
+        "\n| Symbol | Bull % | Direction | Conviction | Velocity/h | Position |",
         "|--------|--------|-----------|------------|------------|----------|",
     ]
-
     for s in sorted(snapshots, key=lambda x: -(x["bull_prob"] or 0.5)):
-        bp    = s["bull_prob"]
-        bp_s  = f"{bp:.0%}" if bp is not None else "N/A"
-        dir_s = ("BULL" if bp and bp > 0.55 else
-                 ("BEAR" if bp and bp < 0.45 else "NEUTRAL"))
+        bp   = s["bull_prob"]
+        bp_s = f"{bp:.0%}" if bp is not None else "N/A"
+        dir_s = ("BULL" if bp and bp > 0.55 else ("BEAR" if bp and bp < 0.45 else "NEUTRAL"))
         conv  = s["breadth"].get("conviction", "—") if s["breadth"] else "—"
         vel   = s["velocity"]
         vel_s = f"{vel:+.2%}/h" if vel is not None else "—"
-        pos   = (s["position"] or "").split(" —")[0][:30] if s["position"] else "—"
-        lines.append(
-            f"| {s['symbol']} | {bp_s} | {dir_s} | {conv} | {vel_s} | {pos} |"
-        )
+        pos   = (s["position"] or "").split(" —")[0][:25] if s["position"] else "—"
+        lines.append(f"| {s['symbol']} | {bp_s} | {dir_s} | {conv} | {vel_s} | {pos} |")
 
     if rising or falling:
         lines.append("\n**Fast-moving signals:**")
         for s in rising:
-            lines.append(f"- {s['symbol']}: bull prob rising at {s['velocity']:+.2%}/h")
+            lines.append(f"- {s['symbol']}: rising {s['velocity']:+.2%}/h")
         for s in falling:
-            lines.append(f"- {s['symbol']}: bull prob falling at {s['velocity']:+.2%}/h")
+            lines.append(f"- {s['symbol']}: falling {s['velocity']:+.2%}/h")
 
-    lines.append(f"\n*Derived from cached signals.jsonl — no live API calls.*")
+    lines.append(f"\n*From cached signals.jsonl — no live API calls.*")
     return "\n".join(lines)
