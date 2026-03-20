@@ -20,6 +20,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 from typing import Optional
 
+from tradingagents.dataflows.advanced_indicators import format_advanced_indicators
+
 # ── Symbol registry ──────────────────────────────────────────────────────────
 # Maps the perp ticker (Binance/Hyperliquid) to the underlying Yahoo Finance
 # ticker used for price data.
@@ -366,7 +368,7 @@ def get_tradfi_technical_analysis(
     rsi_lbl   = "Overbought" if rsi_val > 70 else ("Oversold" if rsi_val < 30 else "Neutral")
     macd_sig  = "Bullish" if macd_h > 0 else "Bearish"
 
-    return (
+    base = (
         f"## {symbol.upper()} Technical Analysis — Daily Underlying Data\n"
         f"**Instrument:** {info['name']}  |  **Perp markets:** {info.get('perps','N/A')}\n"
         f"**Source:** Yahoo Finance ({yf_tick})  |  Lookback: {look_back_days}d\n\n"
@@ -391,3 +393,7 @@ def get_tradfi_technical_analysis(
         f"- Support:    {_f(support)}\n\n"
         f"**Volume:** {vol_signal}\n"
     )
+    adv = format_advanced_indicators(
+        df, open_col="Open", high_col="High", low_col="Low", close_col="Close"
+    )
+    return base + adv

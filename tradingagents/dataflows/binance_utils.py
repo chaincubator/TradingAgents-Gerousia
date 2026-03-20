@@ -25,6 +25,8 @@ try:
 except ImportError:
     _TA_AVAILABLE = False
 
+from tradingagents.dataflows.advanced_indicators import format_advanced_indicators
+
 _INTERVAL_5M = Client.KLINE_INTERVAL_5MINUTE
 _INTERVAL_4H = Client.KLINE_INTERVAL_4HOUR
 
@@ -270,7 +272,7 @@ def get_binance_technical_analysis(
 
     atr_str = f"${atr_val:.4f}" if atr_val == atr_val else "N/A"
 
-    return (
+    base = (
         f"## {symbol.upper()} Short-Term Technical Analysis — 5m Candles\n"
         f"Pair: {pair} | Lookback: {look_back_days}d\n\n"
         f"**Current Price:** ${current_price:,.2f}\n\n"
@@ -291,6 +293,10 @@ def get_binance_technical_analysis(
         f"- Period Average: {avg_vol_all:,.4f} {symbol.upper()}\n"
         f"- Signal: {vol_signal}\n"
     )
+    adv = format_advanced_indicators(
+        df, include_td=False, include_ichimoku=False, include_candles=True
+    )
+    return base + adv
 
 
 # ── 4-hour analysis (standard windows, 2-year lookback) ──────────────────────
@@ -426,7 +432,7 @@ def get_binance_4h_technical_analysis(
 
     def _fmt(v): return f"${v:,.2f}" if v == v else "N/A"
 
-    return (
+    base = (
         f"## {symbol.upper()} 4h Technical Analysis — Binance 4h Candles\n"
         f"Pair: {pair} | Lookback: {look_back_days}d (~{len(df)} bars)\n\n"
         f"**Current Price:** ${current_price:,.2f}\n\n"
@@ -455,3 +461,5 @@ def get_binance_4h_technical_analysis(
         f"- SMA20:          {vol_sma20:,.4f} {symbol.upper()}\n"
         f"- Signal: {vol_signal}\n"
     )
+    adv = format_advanced_indicators(df)
+    return base + adv
