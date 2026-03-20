@@ -25,6 +25,14 @@ def create_market_analyst(llm, toolkit):
                 "prices free from funding-rate and basis distortions. "
                 "Compute and interpret: trend direction (EMA 20/50/200), momentum (RSI, MACD), volatility "
                 "(Bollinger Bands, ATR), and key support/resistance levels. "
+                "The data also includes Advanced Technical Indicators — interpret each of the following:\n"
+                "- TD Sequential: report the current setup count (1-9), whether a setup-9 was recently completed "
+                "(and if it was perfected), and the countdown progress (X/13).\n"
+                "- TD Combo: report active combo countdown and any completed 13 signal.\n"
+                "- Ichimoku Cloud: report price vs cloud (above/inside/below), cloud colour, TK cross status, "
+                "Chikou span signal, and future cloud colour.\n"
+                "- Candlestick Patterns: name each detected pattern, its signal (bullish/bearish/neutral), "
+                "and trading implication.\n"
                 "Consider macro drivers relevant to this asset class (e.g. USD strength, rates, commodity cycles, "
                 "geopolitics for country ETFs). Append a concise Markdown table. "
                 "Be concise and direct. Keep your response under 4096 characters."
@@ -33,18 +41,21 @@ def create_market_analyst(llm, toolkit):
             # Use crypto-specific tools
             tools = [toolkit.get_crypto_price_history, toolkit.get_crypto_technical_analysis]
             system_message = (
-                """You are a cryptocurrency technical analyst tasked with analyzing crypto markets. Your role is to provide comprehensive technical analysis for cryptocurrency trading. Focus on crypto-specific patterns and indicators that are most relevant for digital assets.
-
-Key areas to analyze for cryptocurrency:
-- Price action and trend analysis
-- Volume patterns and market liquidity
-- Support and resistance levels
-- Market volatility and risk assessment
-- Momentum indicators and their reliability in crypto markets
-- Market sentiment and psychological levels
-
-Please write a very detailed and nuanced report of the trends you observe in the cryptocurrency market. Analyze both short-term and long-term trends. Do not simply state the trends are mixed, provide detailed and fine-grained analysis and insights that may help crypto traders make decisions. Consider the unique characteristics of cryptocurrency markets such as 24/7 trading, higher volatility, and sentiment-driven movements."""
-                + " Make sure to append a concise Markdown table at the end. Be concise and direct. Keep your response under 4096 characters."
+                "You are a cryptocurrency short-term technical analyst (5-minute bars). "
+                "Provide comprehensive technical analysis for cryptocurrency trading.\n\n"
+                "Key areas to analyse:\n"
+                "- Price action and trend direction (EMA9 vs EMA21)\n"
+                "- RSI(9) momentum and overbought/oversold signals\n"
+                "- Bollinger Band position and width\n"
+                "- ATR volatility and VWAP relationship\n"
+                "- Volume patterns relative to 4h average\n"
+                "- Support and resistance from last 24h\n"
+                "- Candlestick Patterns (Advanced Indicators section): name each detected "
+                "pattern, its signal, and the trading implication.\n\n"
+                "Do not simply state the trends are mixed — provide specific, actionable insights. "
+                "Consider 24/7 trading, higher volatility, and sentiment-driven moves unique to crypto. "
+                "Append a concise Markdown table at the end. Be concise and direct. "
+                "Keep your response under 4096 characters."
             )
         else:
             # Stock — use existing yfinance / stockstats tools
@@ -144,10 +155,18 @@ def create_market_4h_analyst(llm, toolkit):
                 f"{info['type'].replace('_',' ')} instruments. "
                 f"Analysing {info['name']} ({ticker.upper()}) — perp markets: "
                 f"{info.get('perps','Binance / Hyperliquid')}. "
-                "Use the underlying Yahoo Finance daily price series (1 year+ of data) to identify "
+                "Use the underlying Yahoo Finance daily price series (1+ years of data) to identify "
                 "dominant trends, Golden/Death crosses, MACD signals, RSI regimes, "
                 "Bollinger Band conditions, and key multi-month support/resistance. "
-                "Also highlight macro drivers specific to this asset type. "
+                "The data also includes Advanced Technical Indicators — interpret all of:\n"
+                "- TD Sequential: current setup count (1-9), perfected setup flag, countdown (X/13); "
+                "a completed 9 or 13 is a potential reversal signal.\n"
+                "- TD Combo: active combo countdown and completed 13 signal.\n"
+                "- Ichimoku Cloud (9/26/52): price above/inside/below cloud, cloud colour (bullish/bearish kumo), "
+                "Tenkan/Kijun cross status, Chikou span vs price, future cloud colour.\n"
+                "- Candlestick Patterns: name each detected pattern, signal (bullish/bearish/neutral), "
+                "and how it confirms or contradicts the higher-timeframe trend.\n"
+                "Highlight macro drivers specific to this asset type. "
                 "Append a concise Markdown table. Be concise. Keep under 4096 characters."
             )
         elif instrument_type == "crypto":
@@ -157,22 +176,29 @@ def create_market_4h_analyst(llm, toolkit):
             ]
             system_message = (
                 "You are a cryptocurrency 4-hour chart analyst specialising in "
-                "medium and long-term trend analysis. Your role is to interpret "
-                "2 years of 4-hour OHLCV bars and their technical indicators to "
-                "identify the dominant trend, key structural levels, and cyclical "
-                "patterns relevant for swing and position traders.\n\n"
-                "Focus on:\n"
+                "medium and long-term trend analysis. Interpret 2 years of 4-hour OHLCV "
+                "bars and all technical indicators to identify the dominant trend, key "
+                "structural levels, and cyclical patterns for swing and position traders.\n\n"
+                "Standard indicators to cover:\n"
                 "- Long-term trend direction (EMA50 vs EMA200, Golden/Death Cross)\n"
                 "- MACD crossovers and divergences on the 4h timeframe\n"
                 "- RSI(14) overbought/oversold across the 2-year range\n"
                 "- Bollinger Band squeezes and expansions\n"
-                "- ATR-based volatility regimes\n"
-                "- Stochastic momentum signals\n"
+                "- ATR-based volatility regimes and Stochastic momentum\n"
                 "- Multi-month support and resistance clusters\n"
                 "- Volume patterns and accumulation/distribution\n\n"
-                "Cross-reference short-term 5m analysis with this 4h view to identify "
-                "confluence or divergence between timeframes. "
-                "Append a concise Markdown table summarising key indicator values. "
+                "Advanced Technical Indicators (included in the data) — interpret all of:\n"
+                "- TD Sequential: current setup count (1-9), whether a setup-9 was recently "
+                "completed (perfected or not), and countdown progress (X/13); a completed 13 "
+                "signals a high-probability reversal zone.\n"
+                "- TD Combo: active combo countdown and any completed 13 signal.\n"
+                "- Ichimoku Cloud (9/26/52): price above/inside/below cloud, cloud colour "
+                "(bullish green / bearish red kumo), Tenkan/Kijun cross, Chikou span vs price "
+                "26 bars ago, and future cloud colour projection.\n"
+                "- Candlestick Patterns: identify each detected pattern by name, signal "
+                "(bullish/bearish/neutral), and how it aligns with or contradicts the 4h trend.\n\n"
+                "Cross-reference with short-term 5m analysis for timeframe confluence. "
+                "Append a concise Markdown table summarising all key indicator values. "
                 "Be concise and direct. Keep your response under 4096 characters."
             )
         else:
