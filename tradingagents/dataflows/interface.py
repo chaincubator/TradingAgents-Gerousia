@@ -1,5 +1,6 @@
 from typing import Annotated, Dict
 from .reddit_utils import fetch_top_from_category
+from .stocktwits_utils import get_stocktwits_sentiment as _stocktwits_sentiment
 from .yfin_utils import *
 from .stockstats_utils import *
 from .googlenews_utils import *
@@ -312,50 +313,23 @@ def get_reddit_global_news(
     max_limit_per_day: Annotated[int, "Maximum number of news per day"],
 ) -> str:
     """
-    Retrieve the latest top reddit news
-    Args:
-        start_date: Start date in yyyy-mm-dd format
-        end_date: End date in yyyy-mm-dd format
-    Returns:
-        str: A formatted dataframe containing the latest news articles posts on reddit and meta information in these columns: "created_utc", "id", "title", "selftext", "score", "num_comments", "url"
+    Retrieve recent top posts from global-news and finance subreddits via
+    Reddit's live public JSON API.  Returns at most max_limit_per_day * 7
+    posts (capped at 50).
     """
-
-    start_date = datetime.strptime(start_date, "%Y-%m-%d")
-    before = start_date - relativedelta(days=look_back_days)
-    before = before.strftime("%Y-%m-%d")
-
-    posts = []
-    # iterate from start_date to end_date
-    curr_date = datetime.strptime(before, "%Y-%m-%d")
-
-    total_iterations = (start_date - curr_date).days + 1
-    pbar = tqdm(desc=f"Getting Global News on {start_date}", total=total_iterations)
-
-    while curr_date <= start_date:
-        curr_date_str = curr_date.strftime("%Y-%m-%d")
-        fetch_result = fetch_top_from_category(
-            "global_news",
-            curr_date_str,
-            max_limit_per_day,
-            data_path=os.path.join(DATA_DIR, "reddit_data"),
-        )
-        posts.extend(fetch_result)
-        curr_date += relativedelta(days=1)
-        pbar.update(1)
-
-    pbar.close()
-
-    if len(posts) == 0:
-        return ""
+    max_total = min(max_limit_per_day * min(look_back_days, 7), 50)
+    posts = fetch_top_from_category("global_news", start_date, max_total)
+    if not posts:
+        return "NA — no Reddit global news could be fetched."
 
     news_str = ""
     for post in posts:
-        if post["content"] == "":
-            news_str += f"### {post['title']}\n\n"
+        if post["content"]:
+            news_str += f"### {post['title']}\n\n{post['content'][:800]}\n\n"
         else:
-            news_str += f"### {post['title']}\n\n{post['content']}\n\n"
+            news_str += f"### {post['title']}\n\n"
 
-    return f"## Global News Reddit, from {before} to {curr_date}:\n{news_str}"
+    return f"## Global News from Reddit (recent, up to {start_date}):\n{news_str}"
 
 
 def get_reddit_company_news(
@@ -365,56 +339,39 @@ def get_reddit_company_news(
     max_limit_per_day: Annotated[int, "Maximum number of news per day"],
 ) -> str:
     """
-    Retrieve the latest top reddit news
-    Args:
-        ticker: ticker symbol of the company
-        start_date: Start date in yyyy-mm-dd format
-        end_date: End date in yyyy-mm-dd format
-    Returns:
-        str: A formatted dataframe containing the latest news articles posts on reddit and meta information in these columns: "created_utc", "id", "title", "selftext", "score", "num_comments", "url"
+    Retrieve recent Reddit posts about a specific company or asset via
+    Reddit's live public JSON API.  Searches relevant subreddits and returns
+    the top posts by upvote score.
     """
-
-    start_date = datetime.strptime(start_date, "%Y-%m-%d")
-    before = start_date - relativedelta(days=look_back_days)
-    before = before.strftime("%Y-%m-%d")
-
-    posts = []
-    # iterate from start_date to end_date
-    curr_date = datetime.strptime(before, "%Y-%m-%d")
-
-    total_iterations = (start_date - curr_date).days + 1
-    pbar = tqdm(
-        desc=f"Getting Company News for {ticker} on {start_date}",
-        total=total_iterations,
+    ticker_clean = ticker.strip().upper()
+    max_total    = min(max_limit_per_day * min(look_back_days, 7), 50)
+    posts = fetch_top_from_category(
+        "company_news", start_date, max_total, query=ticker_clean
     )
-
-    while curr_date <= start_date:
-        curr_date_str = curr_date.strftime("%Y-%m-%d")
-        fetch_result = fetch_top_from_category(
-            "company_news",
-            curr_date_str,
-            max_limit_per_day,
-            ticker,
-            data_path=os.path.join(DATA_DIR, "reddit_data"),
-        )
-        posts.extend(fetch_result)
-        curr_date += relativedelta(days=1)
-
-        pbar.update(1)
-
-    pbar.close()
-
-    if len(posts) == 0:
-        return ""
+    if not posts:
+        return f"NA — no Reddit posts found for {ticker_clean}."
 
     news_str = ""
     for post in posts:
-        if post["content"] == "":
-            news_str += f"### {post['title']}\n\n"
+        if post["content"]:
+            news_str += f"### {post['title']}\n\n{post['content'][:800]}\n\n"
         else:
-            news_str += f"### {post['title']}\n\n{post['content']}\n\n"
+            news_str += f"### {post['title']}\n\n"
 
-    return f"##{ticker} News Reddit, from {before} to {curr_date}:\n\n{news_str}"
+    return f"## {ticker_clean} Reddit Discussion (recent, up to {start_date}):\n{news_str}"
+
+
+def get_stocktwits_data(
+    ticker: Annotated[str, "Asset ticker, e.g. AAPL, BTC, GLD, SPY"],
+    curr_date: Annotated[str, "Current date in YYYY-MM-DD format"],
+) -> str:
+    """
+    Fetch recent StockTwits messages and crowd sentiment for a stock, ETF,
+    or cryptocurrency.  No API key required.  Returns bullish/bearish
+    breakdown, follower-weighted sentiment, and top recent messages.
+    Crypto symbols (BTC, ETH, etc.) are automatically formatted as BTC.X.
+    """
+    return _stocktwits_sentiment(ticker.strip().upper(), curr_date)
 
 
 def get_stock_stats_indicators_window(

@@ -16,7 +16,7 @@ def create_social_media_analyst(llm, toolkit):
 
         if instrument_type == "tradfi":
             info  = get_instrument_info(ticker)
-            tools = [toolkit.get_treeofalpha_sentiment]
+            tools = [toolkit.get_stocktwits_data, toolkit.get_reddit_stock_info]
             if toolkit.config["online_tools"]:
                 tools = [toolkit.get_global_news_openai]
             system_message = (
@@ -50,9 +50,9 @@ def create_social_media_analyst(llm, toolkit):
                 + " Append a concise Markdown table summarising key points. Be concise and direct. Keep your response under 4096 characters."
             )
         else:
-            tools = [toolkit.get_reddit_stock_info]
+            tools = [toolkit.get_stocktwits_data, toolkit.get_reddit_stock_info]
             system_message = (
-                "You are a social media and company specific news researcher/analyst tasked with analyzing social media posts, recent company news, and public sentiment for a specific company over the past week. You will be given a company's name your objective is to write a report detailing your analysis, insights, and implications for traders and investors on this company's current state after looking at social media and what people are saying about that company, analyzing sentiment data of what people feel each day about the company, and looking at recent company news. Try to look at all sources possible from social media to sentiment to news. Do not simply state the trends are mixed, provide detailed and fine-grained analysis and insights that may help traders make decisions."
+                "You are a social media and company specific news researcher/analyst tasked with analyzing social media posts, recent company news, and public sentiment for a specific company over the past week. You will be given a company's name your objective is to write a report detailing your analysis, insights, and implications for traders and investors on this company's current state after looking at social media and what people are saying about that company, analyzing sentiment data of what people feel each day about the company, and looking at recent company news. Use both StockTwits crowd sentiment and Reddit discussions. Do not simply state the trends are mixed, provide detailed and fine-grained analysis and insights that may help traders make decisions."
                 + " Append a concise Markdown table summarising key points. Be concise and direct. Keep your response under 4096 characters."
             )
 

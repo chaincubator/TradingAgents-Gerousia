@@ -134,6 +134,23 @@ class Toolkit:
 
     @staticmethod
     @tool
+    def get_stocktwits_data(
+        ticker: Annotated[str, "Asset ticker, e.g. AAPL, BTC, GLD, SPY"],
+        curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
+    ) -> str:
+        """
+        Retrieve recent StockTwits crowd sentiment and messages for a stock,
+        ETF, or crypto.  No API key required.  Returns bullish/bearish
+        breakdown with follower-weighted sentiment and top recent messages.
+        """
+        if not ticker or ticker.strip() == "":
+            return "StockTwits unavailable: ticker symbol is required."
+        return _timed_call(interface.get_stocktwits_data,
+                           ticker.strip().upper(), curr_date,
+                           label=f"StockTwits ({ticker})")
+
+    @staticmethod
+    @tool
     def get_YFin_data(
         symbol: Annotated[str, "ticker symbol of the company"],
         start_date: Annotated[str, "Start date in yyyy-mm-dd format"],
