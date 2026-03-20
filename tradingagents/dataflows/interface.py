@@ -10,8 +10,9 @@ from .coingecko_utils import (
 )
 from .treeofalpha_utils import get_treeofalpha_sentiment
 from .polymarket_utils import (
-    get_polymarket_sentiment as _polymarket_sentiment,
-    read_price_levels_cache  as _read_price_levels,
+    get_polymarket_sentiment    as _polymarket_sentiment,
+    read_price_levels_cache     as _read_price_levels,
+    get_cross_asset_coherence   as _cross_asset_coherence,
 )
 from .fred_utils import get_fred_macro_snapshot as _fred_snapshot
 from .tradfi_utils import (
@@ -950,6 +951,23 @@ def get_polymarket_data(
         pass
 
     return _polymarket_sentiment(symbol, curr_date, cache_dir, current_price)
+
+
+def get_polymarket_cross_asset_coherence(
+    symbols: Annotated[str, "Comma-separated asset tickers e.g. 'BTC,ETH,SOL,GOLD'"],
+    curr_date: Annotated[str, "Current date in YYYY-MM-DD format"],
+) -> str:
+    """
+    Compare Polymarket directional signals and probability velocities across
+    multiple assets using cached snapshot data (no live API calls required).
+    Identifies macro risk-on/risk-off regimes vs. asset-specific moves.
+    Fast-moving signals (>=3%/h change in bull probability) are highlighted.
+    Requires get_polymarket_data to have been called for each symbol first.
+    """
+    config    = get_config()
+    cache_dir = os.path.join(config.get("data_cache_dir", "./data"), "polymarket_cache")
+    sym_list  = [s.strip() for s in symbols.replace(",", " ").split() if s.strip()]
+    return _cross_asset_coherence(sym_list, curr_date, cache_dir)
 
 
 def get_crypto_4h_price_history(
