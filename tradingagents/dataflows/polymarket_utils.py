@@ -763,6 +763,37 @@ def _save_price_levels(cache_dir: str, symbol: str, data: dict):
     )
 
 
+def _write_debug_log(cache_dir: str, symbol: str, data: dict):
+    """
+    Write a structured debug log for inspection after a run.
+
+    Files written:
+      debug_latest.json   always overwritten with the most recent run
+      debug_YYYYMMDD_HHMMSS.json   timestamped copy for history
+      debug.jsonl         append-only one-line-per-run summary
+
+    The full JSON contains:
+      summary             aggregate counts at each pipeline stage
+      all_markets         every market fetched, with disposition + reason
+      enriched_markets    the 25 enriched markets with full OB/surface detail
+      date_surfaces       the derived per-expiry probability surfaces
+    """
+    d = Path(cache_dir) / symbol.upper()
+    d.mkdir(parents=True, exist_ok=True)
+    ts  = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    payload = json.dumps(data, indent=2, default=str)
+    (d / "debug_latest.json").write_text(payload, encoding="utf-8")
+    (d / f"debug_{ts}.json").write_text(payload, encoding="utf-8")
+    # Compact summary line for quick history scanning
+    summary_line = json.dumps({
+        "ts":      data.get("timestamp"),
+        "symbol":  data.get("symbol"),
+        "summary": data.get("summary"),
+    }, default=str)
+    with open(d / "debug.jsonl", "a", encoding="utf-8") as f:
+        f.write(summary_line + "\n")
+
+
 def read_price_levels_cache(symbol: str, cache_dir: str) -> str:
     """
     Return a compact prompt-injectable string from the latest cached snapshot.
@@ -830,8 +861,9 @@ def get_polymarket_sentiment(
     symbol_upper = symbol.upper()
 
     # ── 1. Fetch markets ──────────────────────────────────────────────────────
-    all_markets: List[dict] = []
-    seen_ids: set = set()
+    all_markets:    List[dict]       = []
+    seen_ids:       set              = set()
+    _dbg_per_cat:   Dict[str, int]   = {}   # per-category fetch counts
     for cat in _CATEGORIES:
         data = _get(f"{_GAMMA}/markets", params={
             "active": "true", "closed": "false",
@@ -840,33 +872,71 @@ def get_polymarket_sentiment(
         })
         raw = (data if isinstance(data, list)
                else (data or {}).get("data") or (data or {}).get("markets") or [])
+        added = 0
         for m in raw:
             mid = m.get("id") or m.get("conditionId", "")
             if mid and mid not in seen_ids:
                 seen_ids.add(mid)
                 all_markets.append(m)
+                added += 1
+        _dbg_per_cat[cat] = added
         time.sleep(0.1)
 
     if not all_markets:
         return "NA — Polymarket API unavailable; no live markets could be fetched."
 
     # ── 2. Score relevance, compute hours/bucket ──────────────────────────────
-    scored = []
+    # Log ALL markets (passed and excluded) for debugging.
+    scored:          List[dict] = []
+    _dbg_all_mkts:   List[dict] = []   # full audit trail of every market
+
     for m in all_markets:
-        q     = m.get("question", "") or ""
-        score = _compute_relevance(q, symbol_upper)
-        if score < 0.5:
-            continue
+        q       = m.get("question", "") or ""
+        score   = _compute_relevance(q, symbol_upper)
         end_str = m.get("endDate") or m.get("end_date", "")
         hours   = _hours_to_expiry(end_str)
         days    = hours / 24.0
-        if days > _SHORT_TERM_DAYS:
+        volume  = float(m.get("volume", 0) or 0)
+
+        dbg_entry = {
+            "question":        q,
+            "volume":          round(volume, 2),
+            "relevance_score": round(score, 3),
+            "hours_to_expiry": round(hours, 2),
+            "days_to_expiry":  round(days, 2),
+            "end_date":        end_str,
+        }
+
+        if score < 0.5:
+            dbg_entry["disposition"] = "EXCLUDED"
+            dbg_entry["reason"]      = (
+                f"relevance_score={score:.3f} < 0.5 threshold — "
+                f"question does not mention {symbol_upper} or related macro terms"
+            )
+            _dbg_all_mkts.append(dbg_entry)
             continue
+
+        if days > _SHORT_TERM_DAYS:
+            dbg_entry["disposition"] = "EXCLUDED"
+            dbg_entry["reason"]      = (
+                f"expires in {days:.1f} days > {_SHORT_TERM_DAYS}d short-term limit"
+            )
+            _dbg_all_mkts.append(dbg_entry)
+            continue
+
+        bucket = _classify_bucket(hours)
         m["_relevance"] = score
         m["_hours"]     = hours
-        m["_bucket"]    = _classify_bucket(hours)
+        m["_bucket"]    = bucket
         m["_end_str"]   = end_str
         scored.append(m)
+
+        dbg_entry["disposition"] = "PASS"
+        dbg_entry["reason"]      = (
+            f"relevance={score:.3f}, {hours:.1f}h to expiry, bucket={bucket}"
+        )
+        dbg_entry["bucket"]      = bucket
+        _dbg_all_mkts.append(dbg_entry)
 
     if not scored:
         return (f"NA — no live Polymarket markets with a clear causal relationship to "
@@ -937,38 +1007,81 @@ def get_polymarket_sentiment(
         horizon_str    = _parse_time_horizon(hours)
         res_date       = _parse_resolution_date(q, end_str)
 
+        # ── Determine surface disposition (why included or excluded) ──────────
+        if price_lvl is None:
+            surf_disp   = "NOT_PRICE_LEVEL"
+            surf_reason = "No dollar price level found in question text"
+        elif is_above is None:
+            surf_disp   = "AMBIGUOUS_DIRECTION"
+            surf_reason = "Cannot determine above/below direction from question"
+        elif yes_prob > _SURFACE_MAX_PROB:
+            surf_disp   = "EXCLUDED_NEAR_CERTAIN_YES"
+            surf_reason = (
+                f"P(YES)={yes_prob:.1%} >= {_SURFACE_MAX_PROB:.0%} — near-certain YES "
+                f"(outcome essentially guaranteed, adds no distributional information)"
+            )
+        elif yes_prob < _SURFACE_MIN_PROB:
+            surf_disp   = "EXCLUDED_NEAR_CERTAIN_NO"
+            surf_reason = (
+                f"P(YES)={yes_prob:.1%} <= {_SURFACE_MIN_PROB:.0%} — near-certain NO "
+                f"(outcome essentially impossible, adds no distributional information)"
+            )
+        else:
+            surf_disp   = "CONTRIBUTED_TO_SURFACE"
+            surv_val    = yes_prob if is_above else (1.0 - yes_prob)
+            surf_reason = (
+                f"P(YES)={yes_prob:.1%} within informative range "
+                f"[{_SURFACE_MIN_PROB:.0%}, {_SURFACE_MAX_PROB:.0%}] — "
+                f"survival P(price > ${price_lvl:,.0f}) = {surv_val:.1%}"
+            )
+
         entry = {
-            "question":        q,
-            "yes_prob":        round(yes_prob, 3),
-            "signal":          signal,
-            "bull_prob":       round(bull_p, 3),
-            "volume":          volume,
-            "hours":           hours,
-            "bucket":          bucket,
-            "horizon":         horizon_str,
-            "end_date":        end_str,
-            "ob_mid":          ob_mid,
-            "conviction":      conviction,
-            "urgency":         urgency_val,
-            "price_level":     price_lvl,
-            "is_above":        is_above,
-            "resolution_date": res_date,
-            "ob_depth":        depth_val,
-            "relevance":       m["_relevance"],
+            "question":            q,
+            "yes_prob_initial":    round(yes_prob if ob_mid is None else
+                                         float(m.get("outcomePrices", [0.5])[0]
+                                               if m.get("outcomePrices") else 0.5), 3),
+            "yes_prob_ob_refined": round(ob_mid, 3) if ob_mid is not None else None,
+            "yes_prob":            round(yes_prob, 3),
+            "signal":              signal,
+            "bull_prob":           round(bull_p, 3),
+            "volume":              volume,
+            "hours":               round(hours, 2),
+            "bucket":              bucket,
+            "horizon":             horizon_str,
+            "end_date":            end_str,
+            "ob_bid":              ob.get("weighted_bid") if ob else None,
+            "ob_ask":              ob.get("weighted_ask") if ob else None,
+            "ob_mid":              ob_mid,
+            "ob_conviction":       conviction,
+            "ob_depth_usdc":       round(depth_val, 2),
+            "urgency":             round(urgency_val, 6),
+            "price_level":         price_lvl,
+            "is_above":            is_above,
+            "resolution_date":     res_date,
+            "relevance":           m["_relevance"],
+            "surface_disposition": surf_disp,
+            "surface_reason":      surf_reason,
+            "is_directional":      _is_nonneutral(yes_prob),
         }
         all_enriched.append(entry)
 
         # ── Global surface: INFORMATIVE RANGE ONLY ────────────────────────────
-        if price_lvl is not None and is_above is not None:
-            if _SURFACE_MIN_PROB <= yes_prob <= _SURFACE_MAX_PROB:
-                surv = yes_prob if is_above else (1.0 - yes_prob)
-                price_surface_pts.append((price_lvl, surv))
+        if surf_disp == "CONTRIBUTED_TO_SURFACE":
+            surv = yes_prob if is_above else (1.0 - yes_prob)
+            price_surface_pts.append((price_lvl, surv))
 
         # ── First-to-hit markets ───────────────────────────────────────────────
         fth = _parse_first_to_hit(q, yes_prob, current_price)
         if fth:
+            entry["first_to_hit"]    = fth
+            entry["surface_disposition"] = "FIRST_TO_HIT"
+            entry["surface_reason"]  = (
+                f"P(lo=${fth['lo']:,.0f} first)={fth['p_lo_first']:.1%} — "
+                f"signal={fth['signal']}; "
+                + (f"{len(fth['surface_pts'])} approx surface point(s) added"
+                   if fth["surface_pts"] else "current price not between levels, no surface pts")
+            )
             first_to_hit_list.append({"question": q[:80], **fth, "volume": volume})
-            # Add approximate surface points if current price is between levels
             for sp in fth["surface_pts"]:
                 price_surface_pts.append(sp)
 
@@ -1045,6 +1158,96 @@ def get_polymarket_sentiment(
     log_dir.mkdir(parents=True, exist_ok=True)
     with open(log_dir / "signals.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps(cache_data, default=str) + "\n")
+
+    # ── 11b. Write debug log ──────────────────────────────────────────────────
+    _disp_counts: Dict[str, int] = {}
+    for e in all_enriched:
+        d = e.get("surface_disposition", "UNKNOWN")
+        _disp_counts[d] = _disp_counts.get(d, 0) + 1
+
+    _dbg_excl_relevance = [m for m in _dbg_all_mkts if m.get("reason", "").startswith("relevance")]
+    _dbg_excl_time      = [m for m in _dbg_all_mkts if "expires in" in m.get("reason", "")]
+    _dbg_passed         = [m for m in _dbg_all_mkts if m.get("disposition") == "PASS"]
+
+    debug_data = {
+        "symbol":        symbol_upper,
+        "timestamp":     datetime.now(timezone.utc).isoformat(),
+        "current_price": current_price,
+        "surface_filter": f"[{_SURFACE_MIN_PROB:.0%}, {_SURFACE_MAX_PROB:.0%}]",
+        "summary": {
+            "total_fetched":               len(all_markets),
+            "per_category":                _dbg_per_cat,
+            "excluded_low_relevance":      len(_dbg_excl_relevance),
+            "excluded_beyond_30d":         len(_dbg_excl_time),
+            "passed_relevance_filter":     len(_dbg_passed),
+            "enriched":                    len(all_enriched),
+            "surface_disposition_counts":  _disp_counts,
+            "total_surface_pts":           len(price_surface_pts),
+            "n_date_surfaces":             len(date_surfaces),
+            "date_surfaces_built":         sorted(date_surfaces.keys()),
+            "directional_markets":         len(directional),
+            "first_to_hit_markets":        len(first_to_hit_list),
+            "bull_probability":            agg_bull_p,
+            "bear_probability":            agg_bear_p,
+            "breadth_conviction":          breadth.get("conviction"),
+        },
+        # Every market seen — with disposition and reason
+        "all_markets_considered": _dbg_all_mkts,
+        # Only the enriched 25 — with full OB, probability, and surface detail
+        "enriched_markets": [
+            {
+                "question":            e["question"],
+                "volume":              e["volume"],
+                "hours_to_expiry":     e["hours"],
+                "bucket":              e["bucket"],
+                "resolution_date":     e["resolution_date"],
+                "relevance":           e["relevance"],
+                # Probability chain
+                "yes_prob_initial":    e["yes_prob_initial"],
+                "ob_bid":              e["ob_bid"],
+                "ob_ask":              e["ob_ask"],
+                "ob_mid":              e["ob_mid"],
+                "yes_prob_final":      e["yes_prob"],
+                "ob_conviction":       e["ob_conviction"],
+                "ob_depth_usdc":       e["ob_depth_usdc"],
+                # Signal
+                "signal":              e["signal"],
+                "bull_prob":           e["bull_prob"],
+                "is_directional":      e["is_directional"],
+                # Surface
+                "price_level":         e["price_level"],
+                "is_above":            e["is_above"],
+                "surface_disposition": e["surface_disposition"],
+                "surface_reason":      e["surface_reason"],
+                # First-to-hit (if applicable)
+                "first_to_hit":        e.get("first_to_hit"),
+            }
+            for e in all_enriched
+        ],
+        # The actual derived surfaces with all quantile data
+        "date_surfaces": {
+            rdate: {
+                "n_informative_markets": bl.get("n_informative"),
+                "horizon_days":          bl.get("horizon_days"),
+                "surface_points":        [
+                    {"strike": p, "survival_prob": round(s, 3)}
+                    for p, s in bl.get("surface_points", [])
+                ],
+                "quantiles": {
+                    "q05": bl.get("q05"), "q10": bl.get("q10"),
+                    "q25": bl.get("q25"), "q50": bl.get("q50"),
+                    "q75": bl.get("q75"), "q90": bl.get("q90"),
+                    "q95": bl.get("q95"),
+                },
+                "50pct_ci":         bl.get("p50_range"),
+                "90pct_ci":         bl.get("p90_range"),
+                "lognormal_iv_ann": bl.get("iv"),
+                "position_signal":  bl.get("position_signal"),
+            }
+            for rdate, bl in sorted(date_surfaces.items())
+        },
+    }
+    _write_debug_log(cache_dir, symbol_upper, debug_data)
 
     # ── 12. Format report ─────────────────────────────────────────────────────
     if no_directional_signal:
